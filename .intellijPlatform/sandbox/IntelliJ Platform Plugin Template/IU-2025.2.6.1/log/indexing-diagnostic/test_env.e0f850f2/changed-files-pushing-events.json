@@ -1,5 +1,0 @@
-{"reason":"Push all on [com.intellij.openapi.roots.impl.JavaLanguageLevelPusher@71b17314]","startTime":"2026-04-10T21:58:59.017084317+02:00[Europe/Rome]","duration":1961711,"isCancelled":false}
-{"reason":"Push all on [com.intellij.openapi.roots.impl.JavaLanguageLevelPusher@7d003a05]","startTime":"2026-04-10T22:04:49.984508491+02:00[Europe/Rome]","duration":1347367,"isCancelled":false}
-{"reason":"Push all on [com.intellij.openapi.roots.impl.JavaLanguageLevelPusher@aec41c]","startTime":"2026-04-10T22:07:27.802727633+02:00[Europe/Rome]","duration":1650313,"isCancelled":false}
-{"reason":"Push on VFS changes","startTime":"2026-04-10T22:07:37.827309522+02:00[Europe/Rome]","duration":4264340,"isCancelled":false}
-{"reason":"Push on VFS changes","startTime":"2026-04-10T22:13:17.46785832+02:00[Europe/Rome]","duration":16582459,"isCancelled":false}
