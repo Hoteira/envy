@@ -1,0 +1,23 @@
+<svg width="256" height="256" xmlns="http://www.w3.org/2000/svg" fill="none">
+ <defs>
+  <linearGradient y2="1" x2="1" y1="0" x1="0" id="grad">
+   <stop stop-color="#7b61ff" offset="0%"/>
+   <stop stop-color="#5a39f0" offset="100%"/>
+  </linearGradient>
+ </defs>
+ <!-- Check 1 -->
+ <!-- Check 2 -->
+ <!-- Check 3 -->
+ <g>
+  <title>Layer 1</title>
+  <rect id="svg_1" fill="url(#grad)" ry="48" rx="48" height="256" width="256" y="0" x="0"/>
+  <path stroke="white" id="svg_2" stroke-linejoin="round" stroke-linecap="round" fill="none" stroke-width="15" d="m48,64l24,24l40,-40"/>
+  <rect stroke-width="0" id="svg_3" fill="white" rx="6" height="15" width="80" y="60" x="128"/>
+  <path id="svg_4" stroke-linejoin="round" stroke-linecap="round" fill="none" stroke-width="15" stroke="white" d="m48,128l24,24l40,-40"/>
+  <path id="svg_5" d="m128,132c0,-3.26027 2.73973,-6 6,-6l68,0c3.26027,0 6,2.73973 6,6l0,0c0,3.26027 -2.73973,6 -6,6l-68,0c-3.26027,0 -6,-2.73973 -6,-6l0,0z" opacity="undefined" fill="white"/>
+  <path id="svg_6" stroke-linejoin="round" stroke-linecap="round" fill="none" stroke-width="15" stroke="white" d="m48,192l24,24l40,-40"/>
+  <rect id="svg_7" fill="white" rx="6" height="12" width="80" y="192" x="128"/>
+  <rect stroke-width="0" id="svg_8" fill="white" rx="6" height="15" width="80" y="124" x="129"/>
+  <rect stroke-width="0" id="svg_9" fill="white" rx="6" height="15" width="80" y="190" x="128"/>
+ </g>
+</svg>

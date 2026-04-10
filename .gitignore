@@ -1,0 +1,18 @@
+# Build output
+build/
+
+# Gradle
+.gradle/
+gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env files (ironic)
+.env
+.env.*

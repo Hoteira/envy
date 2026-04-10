@@ -1,0 +1,45 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>com.envy.dotenv</id>
+
+    <name>EnvY</name>
+    <vendor email="hoteira@proton.me" url="https://github.com/Hoteira">Hoteira</vendor>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <fileType
+                name="DotEnv"
+                language="DotEnv"
+                implementationClass="com.envy.dotenv.language.DotEnvFileType"
+                fieldName="INSTANCE"
+                fileNames=".env"
+                patterns=".env.*"
+        />
+
+        <toolWindow
+                id="Env Diff"
+                anchor="bottom"
+                factoryClass="com.envy.dotenv.toolWindow.EnvDiffToolWindowFactory"/>
+
+        <lang.parserDefinition
+                language="DotEnv"
+                implementationClass="com.envy.dotenv.language.DotEnvParserDefinition"/>
+
+        <lang.syntaxHighlighterFactory
+                language="DotEnv"
+                implementationClass="com.envy.dotenv.language.DotEnvSyntaxHighlighterFactory"/>
+
+        <localInspection
+                language="DotEnv"
+                displayName="Duplicate key in .env file"
+                groupName="DotEnv"
+                shortName="DotEnvDuplicateKey"
+                enabledByDefault="true"
+                level="WARNING"
+                implementationClass="com.envy.dotenv.inspections.DuplicateKeyInspection"/>
+    </extensions>
+
+</idea-plugin>
+
+
