@@ -12,7 +12,7 @@ class DotEnvLexer : LexerBase() {
     private var tokenStart: Int = 0
     private var tokenEnd: Int = 0
     private var currentToken: IElementType? = null
-    private var afterSeparator: Boolean = false  // are we after = sign?
+    private var afterSeparator: Boolean = false  // after = sign?
 
     override fun start(buffer: CharSequence, startOffset: Int, endOffset: Int, initialState: Int) {
         this.buffer = buffer

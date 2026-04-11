@@ -30,6 +30,7 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val tableModel = DefaultTableModel(arrayOf("Key", "Left", "Right", "Status"), 0)
     private val table = JBTable(tableModel)
     private var envFiles = mapOf<String, Map<String, String>>()
+    private var loading = false
 
     // Row status for coloring
     private val rowStatuses = mutableListOf<RowStatus>()
@@ -86,14 +87,15 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
         add(JScrollPane(table), BorderLayout.CENTER)
 
         // Listen for dropdown changes
-        leftCombo.addActionListener { updateDiff() }
-        rightCombo.addActionListener { updateDiff() }
+        leftCombo.addActionListener { if (!loading) updateDiff() }
+        rightCombo.addActionListener { if (!loading) updateDiff() }
 
         // Load on init
         loadFiles()
     }
 
     private fun loadFiles() {
+        loading = true
         val files = service.findEnvFiles()
         envFiles = files.associate { it.name to service.parseEnvFile(it) }
 
@@ -105,11 +107,11 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
             rightCombo.addItem(name)
         }
 
-        // Default: compare first with second if possible
         if (envFiles.size >= 2) {
             leftCombo.selectedIndex = 0
             rightCombo.selectedIndex = 1
         }
+        loading = false
 
         updateDiff()
     }
