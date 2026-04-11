@@ -9,14 +9,33 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF.svg?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
 
-<sub>🎨 Syntax Highlighting • 🔍 Duplicate Detection • 📊 Cross-Environment Diff</sub>
+<sub> Syntax Highlighting • Duplicate Detection • Cross-Environment Diff • .envrc Support</sub>
 
 </div>
 
 <br>
 
 <!-- Plugin description -->
-EnvY brings first-class `.env` file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, and a cross-environment diff tool to instantly spot mismatches between your development, staging, and production configs. Works with IntelliJ IDEA, WebStorm, PyCharm, CLion, RustRover, GoLand, PhpStorm, and Rider.
+EnvY brings first-class `.env` file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, and a cross-environment diff tool to instantly spot mismatches between your development, staging, and production configs.
+
+## Free vs Pro
+
+| Feature | Free | Pro |
+|---|:---:|:---:|
+| Syntax highlighting for `.env` files | ✓ | ✓ |
+| Duplicate key detection + quick-fix | ✓ | ✓ |
+| Cross-environment diff tool window | ✓ | ✓ |
+| Recursive `.env` file discovery | ✓ | ✓ |
+| `.envrc` (direnv) file support | ✓ | ✓ |
+| Secret leak detection | | ✓ |
+| Gitignore verification for secrets | | ✓ |
+| Quick-fix: add to `.gitignore` | | ✓ |
+| Quick-fix: replace secret with placeholder | | ✓ |
+| Sensitive key name detection | | ✓ |
+| Env var autocomplete in code | | ✓ |
+| Inline ghost completion (Tab to accept) | | ✓ |
+
+Works with IntelliJ IDEA, WebStorm, PyCharm, CLion, RustRover, GoLand, PhpStorm, and Rider.
 <!-- Plugin description end -->
 
 ## Features
@@ -39,6 +58,11 @@ A dedicated tool window for comparing environment files side by side. Select any
 - **Value mismatches** — same key, different values across environments
 - **Matching entries** — confirmation that configs are synced
 
+### .envrc / direnv Support
+
+Full support for `.envrc` files used by direnv. Environment variables defined with `export` are parsed and included automatically.
+
+
 ## Installation
 
 **From JetBrains Marketplace:**
@@ -53,6 +77,7 @@ A dedicated tool window for comparing environment files side by side. Select any
 - [ ] Env dashboard (all vars across all files)
 - [ ] Run configuration integration
 - [x] Recursive `.env` file discovery in subdirectories
+- [x] `.envrc` (direnv) file support
 
 ## License
 

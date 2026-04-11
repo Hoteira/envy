@@ -21,7 +21,7 @@ class EnvFileService(private val project: Project) {
             if (child.isDirectory) {
                 if (child.name in listOf("node_modules", ".git", "build", "target", ".gradle", ".idea", ".intellijPlatform", "dist", "out", "vendor")) continue
                 collectEnvFiles(child, result)
-            } else if (child.name == ".env" || child.name.startsWith(".env.")) {
+            } else if (child.name == ".env" || child.name.startsWith(".env.") || child.name == ".envrc") {
                 result.add(child)
             }
         }
@@ -35,10 +35,20 @@ class EnvFileService(private val project: Project) {
             val trimmed = line.trim()
             if (trimmed.isEmpty() || trimmed.startsWith("#")) continue
 
-            val effective = if (trimmed.startsWith("export ")) {
-                trimmed.removePrefix("export ").trim()
-            } else {
-                trimmed
+            // Handle .envrc export lines: export KEY=value
+            val effective = when {
+                trimmed.startsWith("export ") -> trimmed.removePrefix("export ").trim()
+                // Skip direnv commands that aren't key=value
+                trimmed.startsWith("dotenv") -> continue
+                trimmed.startsWith("source_env") -> continue
+                trimmed.startsWith("source_up") -> continue
+                trimmed.startsWith("layout ") -> continue
+                trimmed.startsWith("use ") -> continue
+                trimmed.startsWith("PATH_add") -> continue
+                trimmed.startsWith("path_add") -> continue
+                trimmed.startsWith("watch_file") -> continue
+                trimmed.startsWith("log_") -> continue
+                else -> trimmed
             }
 
             val sepIndex = effective.indexOfFirst { it == '=' || it == ':' }

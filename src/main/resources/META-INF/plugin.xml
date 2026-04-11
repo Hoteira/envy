@@ -13,7 +13,7 @@
                 language="DotEnv"
                 implementationClass="com.envy.dotenv.language.DotEnvFileType"
                 fieldName="INSTANCE"
-                fileNames=".env"
+                fileNames=".env;.envrc"
                 patterns=".env.*"
         />
 
@@ -64,7 +64,7 @@
     <product-descriptor
             code="PENVY"
             release-date="20260411"
-            release-version="20261"
+            release-version="10"
             optional="true"/>
 
 </idea-plugin>

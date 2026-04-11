@@ -22,3 +22,11 @@
 - Key name heuristic detection for sensitive variables
 - Env var autocomplete in code (Ctrl+Space)
 - Inline ghost completion for env var names (Tab to accept)
+- 
+## [1.0.1]
+### Added
+- Freemium licensing - Pro features now require a subscription
+
+## [1.1.0]
+### Added
+- Added support for .envrc files syntax highlighting and diffs
