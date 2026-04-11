@@ -60,9 +60,10 @@ class DuplicateKeyInspection : LocalInspectionTool() {
 
                             holder.registerProblem(
                                 lineElement,
-                                "Duplicate key '$key' — first defined on line ${seen[key]}",
+                                "Duplicate key '$key' - first defined on line ${seen[key]}",
                                 com.intellij.codeInspection.ProblemHighlightType.WARNING,
-                                range.shiftLeft(lineElement.textRange.startOffset)
+                                range.shiftLeft(lineElement.textRange.startOffset),
+                                RemoveDuplicateFix(key, index)
                             )
                         }
                     } else {
@@ -70,6 +71,26 @@ class DuplicateKeyInspection : LocalInspectionTool() {
                     }
                 }
             }
+        }
+    }
+}
+
+class RemoveDuplicateFix(private val key: String, private val lineIndex: Int) : com.intellij.codeInspection.LocalQuickFix {
+    override fun getName(): String = "Remove duplicate '$key'"
+    override fun getFamilyName(): String = "DotEnv"
+
+    override fun applyFix(project: com.intellij.openapi.project.Project, descriptor: com.intellij.codeInspection.ProblemDescriptor) {
+        val file = descriptor.psiElement?.containingFile ?: return
+        val document = com.intellij.psi.PsiDocumentManager.getInstance(project).getDocument(file) ?: return
+
+        if (lineIndex < 0 || lineIndex >= document.lineCount) return
+
+        val lineStart = document.getLineStartOffset(lineIndex)
+        val lineEnd = document.getLineEndOffset(lineIndex)
+        val deleteEnd = if (lineEnd < document.textLength && document.text[lineEnd] == '\n') lineEnd + 1 else lineEnd
+
+        com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) {
+            document.deleteString(lineStart, deleteEnd)
         }
     }
 }
