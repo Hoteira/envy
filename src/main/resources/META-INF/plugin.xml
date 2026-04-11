@@ -38,7 +38,25 @@
                 enabledByDefault="true"
                 level="WARNING"
                 implementationClass="com.envy.dotenv.inspections.DuplicateKeyInspection"/>
+
+        <localInspection
+                language="DotEnv"
+                displayName="Possible secret or credential in .env file"
+                groupName="DotEnv"
+                shortName="DotEnvSecretLeak"
+                enabledByDefault="true"
+                level="WARNING"
+                implementationClass="com.envy.dotenv.inspections.SecretLeakInspection"/>
+
+        <vfs.asyncListener
+                implementation="com.envy.dotenv.listeners.GitignoreListener"/>
     </extensions>
+
+    <product-descriptor
+            code="PENVY"
+            release-date="20260411"
+            release-version="20261"
+            optional="true"/>
 
 </idea-plugin>
 
