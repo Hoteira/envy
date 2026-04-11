@@ -47,8 +47,8 @@ A dedicated tool window for comparing environment files side by side. Select any
 
 ## Roadmap
 
-- [ ] Secret leak detection (API keys, tokens, passwords)
-- [ ] Env var autocomplete in code
+- [x] Secret leak detection (API keys, tokens, passwords)
+- [x] Env var autocomplete in code
 - [ ] Required vars validation (`.env.example` as schema)
 - [ ] Env dashboard (all vars across all files)
 - [ ] Run configuration integration

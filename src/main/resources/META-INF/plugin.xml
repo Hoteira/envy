@@ -50,6 +50,15 @@
 
         <vfs.asyncListener
                 implementation="com.envy.dotenv.listeners.GitignoreListener"/>
+
+        <inline.completion.provider
+                implementation="com.envy.dotenv.completion.EnvVarInlineCompletionProvider"/>
+
+        <completion.contributor
+                language="any"
+                order="first"
+                implementationClass="com.envy.dotenv.completion.EnvVarCompletionContributor"/>
+
     </extensions>
 
     <product-descriptor
