@@ -64,7 +64,7 @@
     <product-descriptor
             code="PENVY"
             release-date="20260411"
-            release-version="10"
+            release-version="20"
             optional="true"/>
 
 </idea-plugin>

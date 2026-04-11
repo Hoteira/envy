@@ -27,6 +27,6 @@
 ### Added
 - Freemium licensing - Pro features now require a subscription
 
-## [1.1.0]
+## [2.0.0]
 ### Added
 - Added support for .envrc files syntax highlighting and diffs
