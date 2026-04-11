@@ -1,10 +1,59 @@
-# EnvY
+<div align="center">
+  <br>
+  <img src="src/main/resources/META-INF/pluginIcon.svg" alt="EnvY Logo" width="120" height="120">
+
+
+**Smart `.env` file manager for JetBrains IDEs**
+
+[![JetBrains](https://img.shields.io/badge/JetBrains-Marketplace-000000.svg?style=flat-square&logo=jetbrains)](https://plugins.jetbrains.com/)
+[![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF.svg?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
+[![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
+
+<sub>🎨 Syntax Highlighting • 🔍 Duplicate Detection • 📊 Cross-Environment Diff</sub>
+
+</div>
+
+<br>
 
 <!-- Plugin description -->
-EnvY is a smart .env file manager for JetBrains IDEs. It provides syntax highlighting for environment variable files, detects duplicate keys with inline warnings, and includes a cross-environment diff tool to compare variables across .env, .env.production, .env.staging and other environment files.
+EnvY brings first-class `.env` file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, and a cross-environment diff tool to instantly spot mismatches between your development, staging, and production configs. Works with IntelliJ IDEA, WebStorm, PyCharm, CLion, RustRover, GoLand, PhpStorm, and Rider.
 <!-- Plugin description end -->
 
 ## Features
-- Syntax highlighting for .env files
-- Duplicate key detection with warnings
-- Cross-environment diff tool window
+
+### Syntax Highlighting
+
+Full syntax highlighting for `.env` files — keys, values, comments, quoted strings, and `export` prefixes are all visually distinct. Follows your IDE color scheme automatically.
+
+**Supports any `.env.*` variant.**
+
+### Duplicate Key Detection in production.
+
+Flags duplicate keys with inline warnings. When the same variable appears twice, only the last value takes effect — EnvY catches this before it messes you up in production.
+
+### Cross-Environment Diff
+
+A dedicated tool window for comparing environment files side by side. Select any two `.env` files and instantly see:
+
+- **Missing variables** — keys that exist in one file but not the other
+- **Value mismatches** — same key, different values across environments
+- **Matching entries** — confirmation that configs are synced
+
+## Installation
+
+**From JetBrains Marketplace:**
+
+`Settings` → `Plugins` → `Marketplace` → Search for **"EnvY"** → `Install`
+
+## Roadmap
+
+- [ ] Secret leak detection (API keys, tokens, passwords)
+- [ ] Env var autocomplete in code
+- [ ] Required vars validation (`.env.example` as schema)
+- [ ] Env dashboard (all vars across all files)
+- [ ] Run configuration integration
+- [ ] Recursive `.env` file discovery in subdirectories
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).
