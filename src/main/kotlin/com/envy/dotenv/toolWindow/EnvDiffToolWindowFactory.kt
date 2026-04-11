@@ -1,6 +1,7 @@
 package com.envy.dotenv.toolWindow
 
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentFactory
@@ -97,7 +98,15 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun loadFiles() {
         loading = true
         val files = service.findEnvFiles()
-        envFiles = files.associate { it.name to service.parseEnvFile(it) }
+        val baseDir = project.guessProjectDir()
+        envFiles = files.associate { file ->
+            val relativePath = if (baseDir != null) {
+                file.path.removePrefix(baseDir.path).removePrefix("/")
+            } else {
+                file.name
+            }
+            relativePath to service.parseEnvFile(file)
+        }
 
         leftCombo.removeAllItems()
         rightCombo.removeAllItems()

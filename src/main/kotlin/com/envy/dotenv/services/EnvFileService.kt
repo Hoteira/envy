@@ -11,13 +11,20 @@ class EnvFileService(private val project: Project) {
 
     fun findEnvFiles(): List<VirtualFile> {
         val baseDir = project.guessProjectDir() ?: return emptyList()
+        val result = mutableListOf<VirtualFile>()
+        collectEnvFiles(baseDir, result)
+        return result.sortedBy { it.path }
+    }
 
-        return baseDir.children.filter { file ->
-            !file.isDirectory && (
-                    file.name == ".env" ||
-                            file.name.startsWith(".env.")
-                    )
-        }.sortedBy { it.name }
+    private fun collectEnvFiles(dir: VirtualFile, result: MutableList<VirtualFile>) {
+        for (child in dir.children) {
+            if (child.isDirectory) {
+                if (child.name in listOf("node_modules", ".git", "build", "target", ".gradle", ".idea", ".intellijPlatform", "dist", "out", "vendor")) continue
+                collectEnvFiles(child, result)
+            } else if (child.name == ".env" || child.name.startsWith(".env.")) {
+                result.add(child)
+            }
+        }
     }
 
     fun parseEnvFile(file: VirtualFile): Map<String, String> {

@@ -52,7 +52,7 @@ A dedicated tool window for comparing environment files side by side. Select any
 - [ ] Required vars validation (`.env.example` as schema)
 - [ ] Env dashboard (all vars across all files)
 - [ ] Run configuration integration
-- [ ] Recursive `.env` file discovery in subdirectories
+- [x] Recursive `.env` file discovery in subdirectories
 
 ## License
 
