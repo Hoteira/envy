@@ -30,3 +30,7 @@
 ## [2.0.0]
 ### Added
 - Added support for .envrc files syntax highlighting and diffs
+
+## [2.0.1]
+### Added
+- Tweaks to stop plugin verifier from flagging randomly
