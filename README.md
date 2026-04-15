@@ -73,9 +73,7 @@ Full support for `.envrc` files used by direnv. Environment variables defined wi
 
 - [x] Secret leak detection (API keys, tokens, passwords)
 - [x] Env var autocomplete in code
-- [ ] Required vars validation (`.env.example` as schema)
 - [ ] Env dashboard (all vars across all files)
-- [ ] Run configuration integration
 - [x] Recursive `.env` file discovery in subdirectories
 - [x] `.envrc` (direnv) file support
 

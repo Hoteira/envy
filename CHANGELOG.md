@@ -34,3 +34,7 @@
 ## [2.0.1]
 ### Added
 - Tweaks to stop plugin verifier from flagging randomly
+
+## [2.1.1]
+### Added
+- License handling fix

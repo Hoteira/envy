@@ -49,29 +49,62 @@ object LicenseChecker {
     """.trimIndent()
 
     fun isPaidFeatureAvailable(): Boolean {
-        val facade = LicensingFacade.getInstance() ?: return false
+        var isValid = false
+        try {
+            val facade = LicensingFacade.getInstance()
 
-        val stamp = facade.getConfirmationStamp(PRODUCT_CODE)
+            if (facade != null) {
+                if (facade.isEvaluationLicense) {
+                    isValid = true
+                }
+                
+                val stamp = facade.getConfirmationStamp(PRODUCT_CODE)
+                
+                if (stamp != null) {
+                    when {
+                        stamp.startsWith(KEY_PREFIX) -> {
+                            val key = stamp.substring(KEY_PREFIX.length)
+                            val parts = key.split("-")
 
-        if (stamp == null) return false
+                            if (parts.size >= 4) {
+                                try {
+                                    val decodedLicense = String(Base64.getMimeDecoder().decode(parts[1].toByteArray(StandardCharsets.UTF_8)), StandardCharsets.UTF_8)
+                                } catch(e: Exception) {
+                                }
+                            }
+                            val keyValid = isKeyValid(key)
+                            if (keyValid) isValid = true
+                        }
+                        stamp.startsWith(STAMP_PREFIX) -> {
+                            val stampValid = isLicenseServerStampValid(stamp.substring(STAMP_PREFIX.length))
+                            if (stampValid) isValid = true
+                        }
+                        stamp.startsWith(EVAL_PREFIX) -> {
+                            val evalValid = isEvaluationValid(stamp.substring(EVAL_PREFIX.length))
+                            if (evalValid) isValid = true
+                        }
+                        else -> {
 
-        return when {
-            stamp.startsWith(KEY_PREFIX) -> isKeyValid(stamp.substring(KEY_PREFIX.length))
-            stamp.startsWith(STAMP_PREFIX) -> isLicenseServerStampValid(stamp.substring(STAMP_PREFIX.length))
-            stamp.startsWith(EVAL_PREFIX) -> isEvaluationValid(stamp.substring(EVAL_PREFIX.length))
-            else -> false
+                        }
+                    }
+                }
+            }
+
+        } catch (e: Exception) {
         }
+
+        return isValid
     }
 
     private fun isKeyValid(key: String): Boolean {
         // Offline key validation
         try {
             val parts = key.split("-")
-            if (parts.size < 3) return false
+            if (parts.size < 4) return false
 
-            val licensePartBase64 = parts[0]
-            val signatureBase64 = parts[1]
-            val certBase64 = parts[2]
+            val licensePartBase64 = parts[1]
+            val signatureBase64 = parts[2]
+            val certBase64 = parts[3]
 
             val cert = createCertificate(certBase64)
             val sig = Signature.getInstance("SHA1withRSA")
