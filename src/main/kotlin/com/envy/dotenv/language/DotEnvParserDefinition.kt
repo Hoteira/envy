@@ -27,10 +27,12 @@ class DotEnvParserDefinition : ParserDefinition {
             override fun parse(root: com.intellij.psi.tree.IElementType, builder: PsiBuilder): ASTNode {
                 val rootMarker = builder.mark()
                 while (!builder.eof()) {
-                    if (builder.tokenType == DotEnvTypes.KEY || builder.tokenType == DotEnvTypes.EXPORT) {
+                    val tokenType = builder.tokenType
+                    if (tokenType == DotEnvTypes.KEY || tokenType == DotEnvTypes.EXPORT) {
                         val entry = builder.mark()
-                        // Consume everything until next line
-                        while (!builder.eof() && builder.tokenType != com.intellij.psi.TokenType.WHITE_SPACE) {
+                        // Consume until newline or EOF
+                        while (!builder.eof() && builder.tokenType != com.intellij.psi.TokenType.WHITE_SPACE || 
+                               (builder.tokenType == com.intellij.psi.TokenType.WHITE_SPACE && !builder.tokenText!!.contains("\n") && !builder.tokenText!!.contains("\r"))) {
                             builder.advanceLexer()
                         }
                         entry.done(DotEnvTypes.ENTRY)

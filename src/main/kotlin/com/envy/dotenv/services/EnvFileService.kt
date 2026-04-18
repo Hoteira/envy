@@ -3,9 +3,10 @@ package com.envy.dotenv.services
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.search.FilenameIndex
+import com.intellij.openapi.vfs.VfsUtilCore
+import com.intellij.psi.search.FileTypeIndex
 import com.intellij.psi.search.GlobalSearchScope
-
+import com.envy.dotenv.language.DotEnvFileType
 
 @Service(Service.Level.PROJECT)
 class EnvFileService(private val project: Project) {
@@ -13,18 +14,9 @@ class EnvFileService(private val project: Project) {
     fun findEnvFiles(): List<VirtualFile> {
         val scope = GlobalSearchScope.projectScope(project)
 
-        val allFilenames = FilenameIndex.getAllFilenames(project)
-
-        val targetFilenames = allFilenames.filter {
-            it == ".env" || it.startsWith(".env.") || it == ".envrc"
-        }
-
-        val result = mutableListOf<VirtualFile>()
-        for (name in targetFilenames) {
-            result.addAll(FilenameIndex.getVirtualFilesByName(project, name, scope))
-        }
-
-        return result.filter { file ->
+        val files = FileTypeIndex.getFiles(DotEnvFileType, scope)
+        
+        return files.filter { file ->
             val path = file.path
             !path.contains("/.git/") && !path.contains("/node_modules/")
         }.sortedBy { it.path }
@@ -32,7 +24,7 @@ class EnvFileService(private val project: Project) {
 
     fun parseEnvFile(file: VirtualFile): Map<String, String> {
         val result = mutableMapOf<String, String>()
-        val text = String(file.contentsToByteArray(), Charsets.UTF_8)
+        val text = VfsUtilCore.loadText(file)
 
         for (line in text.lines()) {
             val trimmed = line.trim()
