@@ -3,28 +3,31 @@ package com.envy.dotenv.services
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.project.guessProjectDir
+import com.intellij.psi.search.FilenameIndex
+import com.intellij.psi.search.GlobalSearchScope
 
 
 @Service(Service.Level.PROJECT)
 class EnvFileService(private val project: Project) {
 
     fun findEnvFiles(): List<VirtualFile> {
-        val baseDir = project.guessProjectDir() ?: return emptyList()
-        val result = mutableListOf<VirtualFile>()
-        collectEnvFiles(baseDir, result)
-        return result.sortedBy { it.path }
-    }
+        val scope = GlobalSearchScope.projectScope(project)
 
-    private fun collectEnvFiles(dir: VirtualFile, result: MutableList<VirtualFile>) {
-        for (child in dir.children) {
-            if (child.isDirectory) {
-                if (child.name in listOf("node_modules", ".git", "build", "target", ".gradle", ".idea", ".intellijPlatform", "dist", "out", "vendor")) continue
-                collectEnvFiles(child, result)
-            } else if (child.name == ".env" || child.name.startsWith(".env.") || child.name == ".envrc") {
-                result.add(child)
-            }
+        val allFilenames = FilenameIndex.getAllFilenames(project)
+
+        val targetFilenames = allFilenames.filter {
+            it == ".env" || it.startsWith(".env.") || it == ".envrc"
         }
+
+        val result = mutableListOf<VirtualFile>()
+        for (name in targetFilenames) {
+            result.addAll(FilenameIndex.getVirtualFilesByName(project, name, scope))
+        }
+
+        return result.filter { file ->
+            val path = file.path
+            !path.contains("/.git/") && !path.contains("/node_modules/")
+        }.sortedBy { it.path }
     }
 
     fun parseEnvFile(file: VirtualFile): Map<String, String> {

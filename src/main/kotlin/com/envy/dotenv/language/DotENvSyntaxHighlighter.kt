@@ -10,11 +10,12 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.tree.IElementType
 import com.envy.dotenv.language.psi.DotEnvTypes
+import com.intellij.openapi.editor.HighlighterColors
+import com.intellij.psi.TokenType
 
 class DotEnvSyntaxHighlighter : SyntaxHighlighterBase() {
-
     companion object {
-        val KEY = TextAttributesKey.createTextAttributesKey("DOTENV_KEY", DefaultLanguageHighlighterColors.KEYWORD)
+        val KEY = TextAttributesKey.createTextAttributesKey("DOTENV_KEY", DefaultLanguageHighlighterColors.INSTANCE_FIELD)
         val VALUE = TextAttributesKey.createTextAttributesKey("DOTENV_VALUE", DefaultLanguageHighlighterColors.STRING)
         val COMMENT = TextAttributesKey.createTextAttributesKey("DOTENV_COMMENT", DefaultLanguageHighlighterColors.LINE_COMMENT)
         val SEPARATOR = TextAttributesKey.createTextAttributesKey("DOTENV_SEPARATOR", DefaultLanguageHighlighterColors.OPERATION_SIGN)
@@ -30,13 +31,16 @@ class DotEnvSyntaxHighlighter : SyntaxHighlighterBase() {
             DotEnvTypes.COMMENT -> arrayOf(COMMENT)
             DotEnvTypes.SEPARATOR -> arrayOf(SEPARATOR)
             DotEnvTypes.EXPORT -> arrayOf(EXPORT)
+            TokenType.BAD_CHARACTER -> arrayOf(HighlighterColors.BAD_CHARACTER)
             else -> emptyArray()
         }
     }
 }
 
 class DotEnvSyntaxHighlighterFactory : SyntaxHighlighterFactory() {
+    private val highlighter by lazy { DotEnvSyntaxHighlighter() }
+
     override fun getSyntaxHighlighter(project: Project?, virtualFile: VirtualFile?): SyntaxHighlighter {
-        return DotEnvSyntaxHighlighter()
+        return highlighter
     }
 }
