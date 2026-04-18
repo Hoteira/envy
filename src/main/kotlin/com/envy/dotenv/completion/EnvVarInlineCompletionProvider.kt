@@ -10,6 +10,23 @@ import com.envy.dotenv.licensing.LicenseChecker
 
 class EnvVarInlineCompletionProvider : InlineCompletionProvider {
 
+    companion object {
+        private val envPatterns = listOf(
+            Regex("""process\.env\.(\w*)$"""),
+            Regex("""process\.env\[["'](\w*)$"""),
+            Regex("""os\.environ\[["'](\w*)$"""),
+            Regex("""os\.environ\.get\(["'](\w*)$"""),
+            Regex("""os\.getenv\(["'](\w*)$"""),
+            Regex("""env::var\(["'](\w*)$"""),
+            Regex("""std::env::var\(["'](\w*)$"""),
+            Regex("""getenv\(["'](\w*)$"""),
+            Regex("""System\.getenv\(["'](\w*)$"""),
+            Regex("""os\.Getenv\(["'](\w*)$"""),
+            Regex("""ENV\[["'](\w*)$"""),
+            Regex("""env\(["'](\w*)$""")
+        )
+    }
+
     override val id: InlineCompletionProviderID
         get() = InlineCompletionProviderID("EnvVarInlineCompletion")
 
@@ -27,21 +44,6 @@ class EnvVarInlineCompletionProvider : InlineCompletionProvider {
         val textBeforeCursor = document.getText(TextRange(lineStart, offset))
 
         // Check if we're in an env access pattern
-        val envPatterns = listOf(
-            Regex("""process\.env\.(\w*)$"""),
-            Regex("""process\.env\[["'](\w*)$"""),
-            Regex("""os\.environ\[["'](\w*)$"""),
-            Regex("""os\.environ\.get\(["'](\w*)$"""),
-            Regex("""os\.getenv\(["'](\w*)$"""),
-            Regex("""env::var\(["'](\w*)$"""),
-            Regex("""std::env::var\(["'](\w*)$"""),
-            Regex("""getenv\(["'](\w*)$"""),
-            Regex("""System\.getenv\(["'](\w*)$"""),
-            Regex("""os\.Getenv\(["'](\w*)$"""),
-            Regex("""ENV\[["'](\w*)$"""),
-            Regex("""env\(["'](\w*)$"""),
-        )
-
         var prefix = ""
         var matched = false
 

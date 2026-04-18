@@ -21,42 +21,44 @@ class EnvVarCompletionContributor : CompletionContributor() {
 
 class EnvVarCompletionProvider : CompletionProvider<CompletionParameters>() {
 
-    // Patterns that indicate the user is accessing an env var
-    private val envAccessPatterns = listOf(
-        // JavaScript / TypeScript
-        Regex("""process\.env\.(\w*)$"""),
-        Regex("""process\.env\[['"](\w*)['"]?\]?$"""),
-        Regex("""import\.meta\.env\.(\w*)$"""),
+    companion object {
+        // Patterns that indicate the user is accessing an env var
+        private val envAccessPatterns = listOf(
+            // JavaScript / TypeScript
+            Regex("""process\.env\.(\w*)$"""),
+            Regex("""process\.env\[['"](\w*)['"]?\]?$"""),
+            Regex("""import\.meta\.env\.(\w*)$"""),
 
-        // Python
-        Regex("""os\.environ\[['"](\w*)['"]?\]?$"""),
-        Regex("""os\.environ\.get\(['"](\w*)['"]?\)?$"""),
-        Regex("""os\.getenv\(['"](\w*)['"]?\)?$"""),
+            // Python
+            Regex("""os\.environ\[['"](\w*)['"]?\]?$"""),
+            Regex("""os\.environ\.get\(['"](\w*)['"]?\)?$"""),
+            Regex("""os\.getenv\(['"](\w*)['"]?\)?$"""),
 
-        // Rust
-        Regex("""env::var\(['"](\w*)['"]?\)?$"""),
-        Regex("""std::env::var\(['"](\w*)['"]?\)?$"""),
+            // Rust
+            Regex("""env::var\(['"](\w*)['"]?\)?$"""),
+            Regex("""std::env::var\(['"](\w*)['"]?\)?$"""),
 
-        // PHP
-        Regex("""getenv\(['"](\w*)['"]?\)?$"""),
-        Regex("""\${'$'}_ENV\[['"](\w*)['"]?\]?$"""),
-        Regex("""env\(['"](\w*)['"]?\)?$"""),
+            // PHP
+            Regex("""getenv\(['"](\w*)['"]?\)?$"""),
+            Regex("""\${'$'}_ENV\[['"](\w*)['"]?\]?$"""),
+            Regex("""env\(['"](\w*)['"]?\)?$"""),
 
-        // Ruby
-        Regex("""ENV\[['"](\w*)['"]?\]?$"""),
+            // Ruby
+            Regex("""ENV\[['"](\w*)['"]?\]?$"""),
 
-        // Go
-        Regex("""os\.Getenv\(['"](\w*)['"]?\)?$"""),
+            // Go
+            Regex("""os\.Getenv\(['"](\w*)['"]?\)?$"""),
 
-        // Java / Kotlin
-        Regex("""System\.getenv\(['"](\w*)['"]?\)?$"""),
+            // Java / Kotlin
+            Regex("""System\.getenv\(['"](\w*)['"]?\)?$"""),
 
-        // C# / .NET
-        Regex("""Environment\.GetEnvironmentVariable\(['"](\w*)['"]?\)?$"""),
+            // C# / .NET
+            Regex("""Environment\.GetEnvironmentVariable\(['"](\w*)['"]?\)?$"""),
 
-        // Generic dotenv usage
-        Regex("""dotenv\[['"](\w*)['"]?\]?$"""),
-    )
+            // Generic dotenv usage
+            Regex("""dotenv\[['"](\w*)['"]?\]?$""")
+        )
+    }
 
     override fun addCompletions(
         parameters: CompletionParameters,

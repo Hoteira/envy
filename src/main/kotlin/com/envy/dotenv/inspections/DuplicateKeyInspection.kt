@@ -24,7 +24,13 @@ class DuplicateKeyInspection : LocalInspectionTool() {
                 // Map of key name -> first line number (1-indexed)
                 val seen = mutableMapOf<String, Int>()
 
+                var currentOffset = 0
+
                 for ((index, line) in lines.withIndex()) {
+                    val lineLength = line.length
+                    val lineStartOffset = currentOffset
+                    currentOffset += lineLength + 1 // +1 for the newline character
+
                     val trimmed = line.trim()
 
                     // Skip comments and blank lines
@@ -46,12 +52,10 @@ class DuplicateKeyInspection : LocalInspectionTool() {
 
                     if (seen.containsKey(key)) {
                         // Find the PSI element at this offset to attach the warning
-                        val lineStartOffset = text.lines().take(index).sumOf { it.length + 1 }
                         val keyOffset = lineStartOffset + line.indexOf(key)
                         val element = file.findElementAt(keyOffset)
 
                         if (element != null) {
-                            val lineStartOffset = text.lines().take(index).sumOf { it.length + 1 }
                             val lineEndOffset = lineStartOffset + line.length
 
                             val range = com.intellij.openapi.util.TextRange(lineStartOffset, lineEndOffset)

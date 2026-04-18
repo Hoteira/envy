@@ -42,33 +42,54 @@ class AddToGitignoreFix(private val fileName: String) : com.intellij.codeInspect
 
 class SecretLeakInspection : LocalInspectionTool() {
 
+    companion object {
+        private val secretPatterns = listOf(
+            SecretPattern("AWS Access Key", Regex("AKIA[0-9A-Z]{16}")),
+            SecretPattern("Stripe Secret Key", Regex("sk_(live|test)_[0-9a-zA-Z]{24,}")),
+            SecretPattern("Stripe Restricted Key", Regex("rk_(live|test)_[0-9a-zA-Z]{24,}")),
+            SecretPattern("GitHub Token", Regex("gh[pousr]_[A-Za-z0-9_]{36,}")),
+            SecretPattern("OpenAI API Key", Regex("sk-[a-zA-Z0-9-_]{20,}")),
+            SecretPattern("SendGrid API Key", Regex("SG\\.[a-zA-Z0-9_-]{22}\\.[a-zA-Z0-9_-]{43}")),
+            SecretPattern("Slack Token", Regex("xox[baprs]-[0-9a-zA-Z-]{10,}")),
+            SecretPattern("JSON Web Token", Regex("eyJ[A-Za-z0-9-_]+\\.eyJ[A-Za-z0-9-_]+\\.[A-Za-z0-9-_]+")),
+            SecretPattern("Private Key", Regex("-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----")),
+        )
+
+        private val sensitiveKeyWords = listOf(
+            "SECRET", "PASSWORD", "PASSWD", "PWD", "TOKEN", "API_KEY", "APIKEY",
+            "PRIVATE_KEY", "CREDENTIAL", "AUTH", "ACCESS_KEY", "CLIENT_SECRET",
+            "ENCRYPTION_KEY", "SIGNING_KEY", "DATABASE_URL", "KEY", "SECRET"
+        )
+
+        private val placeholderValues = setOf(
+            "", "changeme", "change_me", "xxx", "your_key_here", "TODO",
+            "replace_me", "placeholder", "null", "none", "undefined"
+        )
+
+        fun getSecretPatternName(value: String): String? {
+            return secretPatterns.find { it.regex.containsMatchIn(value) }?.name
+        }
+
+        fun isSecret(key: String, value: String): Boolean {
+            if (value.isEmpty()) return false
+            if (getSecretPatternName(value) != null) return true
+
+            val upperKey = key.uppercase()
+            val isSensitiveKey = sensitiveKeyWords.any { upperKey.contains(it) }
+            if (!isSensitiveKey) return false
+
+            val lowerValue = value.lowercase().trim()
+            if (lowerValue in placeholderValues) return false
+            if (lowerValue.startsWith("your_") && lowerValue.endsWith("_here")) return false
+
+            return value.length >= 4
+        }
+    }
+
     override fun getDisplayName(): String = "Secret leak risk in .env file"
     override fun getGroupDisplayName(): String = "DotEnv"
     override fun getShortName(): String = "DotEnvSecretLeak"
     override fun isEnabledByDefault(): Boolean = true
-
-    private val secretPatterns = listOf(
-        SecretPattern("AWS Access Key", Regex("AKIA[0-9A-Z]{16}")),
-        SecretPattern("Stripe Secret Key", Regex("sk_(live|test)_[0-9a-zA-Z]{24,}")),
-        SecretPattern("Stripe Restricted Key", Regex("rk_(live|test)_[0-9a-zA-Z]{24,}")),
-        SecretPattern("GitHub Token", Regex("gh[pousr]_[A-Za-z0-9_]{36,}")),
-        SecretPattern("OpenAI API Key", Regex("sk-[a-zA-Z0-9-_]{20,}")),
-        SecretPattern("SendGrid API Key", Regex("SG\\.[a-zA-Z0-9_-]{22}\\.[a-zA-Z0-9_-]{43}")),
-        SecretPattern("Slack Token", Regex("xox[baprs]-[0-9a-zA-Z-]{10,}")),
-        SecretPattern("JSON Web Token", Regex("eyJ[A-Za-z0-9-_]+\\.eyJ[A-Za-z0-9-_]+\\.[A-Za-z0-9-_]+")),
-        SecretPattern("Private Key", Regex("-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----")),
-    )
-
-    private val sensitiveKeyWords = listOf(
-        "SECRET", "PASSWORD", "PASSWD", "PWD", "TOKEN", "API_KEY", "APIKEY",
-        "PRIVATE_KEY", "CREDENTIAL", "AUTH", "ACCESS_KEY", "CLIENT_SECRET",
-        "ENCRYPTION_KEY", "SIGNING_KEY", "DATABASE_URL"
-    )
-
-    private val placeholderValues = setOf(
-        "", "changeme", "change_me", "xxx", "your_key_here", "TODO",
-        "replace_me", "placeholder", "null", "none", "undefined"
-    )
 
     // Files that are typically committed to version control
     private val committedFileNames = setOf(
@@ -78,21 +99,6 @@ class SecretLeakInspection : LocalInspectionTool() {
         ".env.defaults",
         ".env.dist"
     )
-
-    private fun looksLikeSecret(key: String, value: String): Boolean {
-        // Check if key name suggests a secret
-        val upperKey = key.uppercase()
-        val isSensitiveKey = sensitiveKeyWords.any { upperKey.contains(it) }
-        if (!isSensitiveKey) return false
-
-        // Check if value is a placeholder (not a real secret)
-        val lowerValue = value.lowercase().trim()
-        if (lowerValue in placeholderValues) return false
-        if (lowerValue.startsWith("your_") && lowerValue.endsWith("_here")) return false
-
-        // Has actual content that could be a secret
-        return value.length >= 4
-    }
 
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor {
         return object : PsiElementVisitor() {
@@ -111,7 +117,13 @@ class SecretLeakInspection : LocalInspectionTool() {
                 // Scan for secrets
                 val secretsFound = mutableListOf<Pair<Int, String>>() // line index, pattern name
 
+                var currentOffset = 0
+
                 for ((index, line) in lines.withIndex()) {
+                    val lineLength = line.length
+                    val lineStartOffset = currentOffset
+                    currentOffset += lineLength + 1
+
                     val trimmed = line.trim()
                     if (trimmed.isEmpty() || trimmed.startsWith("#")) continue
 
@@ -131,35 +143,28 @@ class SecretLeakInspection : LocalInspectionTool() {
 
                     if (value.isEmpty()) continue
 
-                    for (pattern in secretPatterns) {
-                        if (pattern.regex.containsMatchIn(value)) {
-                            secretsFound.add(index to pattern.name)
+                    val patternName = getSecretPatternName(value)
+                    if (patternName != null) {
+                        secretsFound.add(index to patternName)
 
-                            // Only warn if secrets are in a committed file
-                            if (isCommittedFile) {
-                                val lineStartOffset = text.lines().take(index).sumOf { it.length + 1 }
-                                val lineEnd = lineStartOffset + line.length
-                                val element = file.findElementAt(lineStartOffset)?.parent ?: file
-                                val range = TextRange(lineStartOffset, lineEnd)
+                        // Only warn if secrets are in a committed file
+                        if (isCommittedFile) {
+                            val lineEnd = lineStartOffset + line.length
+                            val element = file.findElementAt(lineStartOffset)?.parent ?: file
+                            val range = TextRange(lineStartOffset, lineEnd)
 
-                                holder.registerProblem(
-                                    element,
-                                    "${pattern.name} detected in '$key' - this file is typically committed to version control",
-                                    ProblemHighlightType.ERROR,
-                                    range.shiftLeft(element.textRange.startOffset),
-                                    ReplaceWithPlaceholderFix(key, index)
-                                )
-                            }
-                            break
+                            holder.registerProblem(
+                                element,
+                                "$patternName detected in '$key' - this file is typically committed to version control",
+                                ProblemHighlightType.ERROR,
+                                range.shiftLeft(element.textRange.startOffset),
+                                ReplaceWithPlaceholderFix(key, index)
+                            )
                         }
-                    }
-
-                    // If no regex matched, check key name heuristics
-                    if (secretsFound.none { it.first == index } && looksLikeSecret(key, value)) {
+                    } else if (isSecret(key, value)) {
                         secretsFound.add(index to "Possible secret (sensitive key name)")
 
                         if (isCommittedFile) {
-                            val lineStartOffset = text.lines().take(index).sumOf { it.length + 1 }
                             val lineEnd = lineStartOffset + line.length
                             val element = file.findElementAt(lineStartOffset)?.parent ?: file
                             val range = TextRange(lineStartOffset, lineEnd)
@@ -177,6 +182,13 @@ class SecretLeakInspection : LocalInspectionTool() {
 
                 // Warn on each secret line if file is not gitignored
                 if (!isGitignored && !isCommittedFile) {
+                    var offset = 0
+                    val lineOffsets = IntArray(lines.size)
+                    for (i in lines.indices) {
+                        lineOffsets[i] = offset
+                        offset += lines[i].length + 1
+                    }
+
                     for ((index, patternName) in secretsFound) {
                         val line = lines[index]
                         val trimmed = line.trim()
@@ -185,7 +197,7 @@ class SecretLeakInspection : LocalInspectionTool() {
                         if (sepIndex <= 0) continue
                         val key = effective.substring(0, sepIndex).trim()
 
-                        val lineStartOffset = text.lines().take(index).sumOf { it.length + 1 }
+                        val lineStartOffset = lineOffsets[index]
                         val lineEnd = lineStartOffset + line.length
                         val element = file.findElementAt(lineStartOffset)?.parent ?: file
                         val range = TextRange(lineStartOffset, lineEnd)
@@ -204,31 +216,7 @@ class SecretLeakInspection : LocalInspectionTool() {
     }
 
     private fun isFileGitignored(file: VirtualFile, project: com.intellij.openapi.project.Project): Boolean {
-        val baseDir = project.guessProjectDir() ?: return false
-        val gitignore = baseDir.findChild(".gitignore") ?: return false
-
-        val gitignoreContent = String(gitignore.contentsToByteArray(), Charsets.UTF_8)
-        val fileName = file.name
-
-        // Simple check: see if the filename or a matching pattern is in .gitignore
-        for (line in gitignoreContent.lines()) {
-            val trimmed = line.trim()
-            if (trimmed.isEmpty() || trimmed.startsWith("#")) continue
-
-            // Direct filename match
-            if (trimmed == fileName) return true
-
-            // Pattern match like .env* or .env.*
-            if (trimmed == ".env*" || trimmed == ".env.*") return true
-            if (trimmed == ".env" && fileName == ".env") return true
-
-            // Wildcard match: .env.* matches .env.local, .env.production etc
-            if (trimmed.endsWith("*")) {
-                val prefix = trimmed.removeSuffix("*")
-                if (fileName.startsWith(prefix)) return true
-            }
-        }
-        return false
+        return com.intellij.openapi.vcs.changes.ChangeListManager.getInstance(project).isIgnoredFile(file)
     }
 
     data class SecretPattern(val name: String, val regex: Regex)

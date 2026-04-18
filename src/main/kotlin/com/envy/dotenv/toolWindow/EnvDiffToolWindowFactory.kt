@@ -99,32 +99,36 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun loadFiles() {
         loading = true
-        val files = service.findEnvFiles()
-        val baseDir = project.guessProjectDir()
-        envFiles = files.associate { file ->
-            val relativePath = if (baseDir != null) {
-                file.path.removePrefix(baseDir.path).removePrefix("/")
-            } else {
-                file.name
+        com.intellij.openapi.application.ReadAction.nonBlocking(java.util.concurrent.Callable {
+            val files = service.findEnvFiles()
+            val baseDir = project.guessProjectDir()
+            files.associate { file ->
+                val relativePath = if (baseDir != null) {
+                    file.path.removePrefix(baseDir.path).removePrefix("/")
+                } else {
+                    file.name
+                }
+                relativePath to service.parseEnvFile(file)
             }
-            relativePath to service.parseEnvFile(file)
+        })
+        .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState()) { result ->
+            envFiles = result
+            leftCombo.removeAllItems()
+            rightCombo.removeAllItems()
+
+            for (name in envFiles.keys) {
+                leftCombo.addItem(name)
+                rightCombo.addItem(name)
+            }
+
+            if (envFiles.size >= 2) {
+                leftCombo.selectedIndex = 0
+                rightCombo.selectedIndex = 1
+            }
+            loading = false
+            updateDiff()
         }
-
-        leftCombo.removeAllItems()
-        rightCombo.removeAllItems()
-
-        for (name in envFiles.keys) {
-            leftCombo.addItem(name)
-            rightCombo.addItem(name)
-        }
-
-        if (envFiles.size >= 2) {
-            leftCombo.selectedIndex = 0
-            rightCombo.selectedIndex = 1
-        }
-        loading = false
-
-        updateDiff()
+        .submit(com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService())
     }
 
     private fun updateDiff() {
