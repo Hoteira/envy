@@ -16,7 +16,7 @@
 <br>
 
 <!-- Plugin description -->
-EnvY brings first-class `.env` file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, and a cross-environment diff tool to instantly spot mismatches between your development, staging, and production configs.
+EnvY brings better `.env` file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, and a cross-environment diff tool to instantly spot mismatches between your development, staging, and production configs.
 
 ## Free vs Pro
 
