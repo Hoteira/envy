@@ -11,7 +11,6 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.project.guessProjectDir
 
-
 class AddToGitignoreFix(private val fileName: String) : com.intellij.codeInspection.LocalQuickFix {
     override fun getName(): String = "Add '$fileName' to .gitignore"
     override fun getFamilyName(): String = "DotEnv"
