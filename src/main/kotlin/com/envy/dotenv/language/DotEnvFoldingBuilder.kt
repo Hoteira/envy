@@ -13,7 +13,7 @@ import com.envy.dotenv.inspections.SecretLeakInspection
 class DotEnvFoldingBuilder : FoldingBuilderEx() {
 
     override fun buildFoldRegions(root: PsiElement, document: Document, quick: Boolean): Array<FoldingDescriptor> {
-        if (root !is DotEnvFile) return FoldingDescriptor.EMPTY
+        if (root !is DotEnvFile) return emptyArray()
 
         val descriptors = mutableListOf<FoldingDescriptor>()
 

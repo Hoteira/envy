@@ -11,6 +11,8 @@ import com.envy.dotenv.language.DotEnvFileType
 @Service(Service.Level.PROJECT)
 class EnvFileService(private val project: Project) {
 
+    private val parseCache = java.util.concurrent.ConcurrentHashMap<VirtualFile, Pair<Long, Map<String, String>>>()
+
     fun findEnvFiles(): List<VirtualFile> {
         val scope = GlobalSearchScope.projectScope(project)
 
@@ -23,6 +25,16 @@ class EnvFileService(private val project: Project) {
     }
 
     fun parseEnvFile(file: VirtualFile): Map<String, String> {
+        val stamp = file.modificationStamp
+        parseCache[file]?.let { (cachedStamp, result) ->
+            if (cachedStamp == stamp) return result
+        }
+        val result = doParse(file)
+        parseCache[file] = stamp to result
+        return result
+    }
+
+    private fun doParse(file: VirtualFile): Map<String, String> {
         val result = mutableMapOf<String, String>()
         val text = VfsUtilCore.loadText(file)
 
