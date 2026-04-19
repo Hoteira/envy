@@ -48,6 +48,19 @@
                 level="WARNING"
                 implementationClass="com.envy.dotenv.inspections.SecretLeakInspection"/>
 
+        <lang.foldingBuilder
+                language="DotEnv"
+                implementationClass="com.envy.dotenv.language.DotEnvFoldingBuilder"/>
+
+        <localInspection
+                language="DotEnv"
+                displayName="Secret value hidden in presentation mode"
+                groupName="DotEnv"
+                shortName="DotEnvPresentationMode"
+                enabledByDefault="true"
+                level="INFORMATION"
+                implementationClass="com.envy.dotenv.inspections.PresentationModeInspection"/>
+
         <vfs.asyncListener
                 implementation="com.envy.dotenv.listeners.GitignoreListener"/>
 
@@ -56,15 +69,19 @@
 
         <completion.contributor
                 language="any"
-                order="first"
                 implementationClass="com.envy.dotenv.completion.EnvVarCompletionContributor"/>
 
     </extensions>
 
+    <applicationListeners>
+        <listener class="com.envy.dotenv.listeners.DotEnvPresentationModeListener"
+                  topic="com.intellij.ide.ui.UISettingsListener"/>
+    </applicationListeners>
+
     <product-descriptor
             code="PENVY"
-            release-date="20260415"
-            release-version="21"
+            release-date="20260419"
+            release-version="22"
             optional="true"/>
 
 </idea-plugin>

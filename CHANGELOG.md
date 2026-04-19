@@ -38,3 +38,14 @@
 ## [2.1.1]
 ### Added
 - License handling fix
+
+## [2.2.0]
+### Added
+- Secret values fold to `***` in presentation mode (free feature, no gitignore requirement)
+- Quick-fix actions to reveal a specific key or all hidden values in the file
+
+### Fixed
+- Completion now filters by the typed prefix and masks secret values in the popup
+- Diff tool row colors now adapt to light and dark themes
+- Lexer bounds check for escape sequences at end of quoted values
+- License stamp validator tightened (requires valid base64, unknown eval formats denied)

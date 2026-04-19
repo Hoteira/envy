@@ -19,7 +19,7 @@ class DotEnvLexer : LexerBase() {
         this.startOffset = startOffset
         this.endOffset = endOffset
         this.currentPos = startOffset
-        this.afterSeparator = false
+        this.afterSeparator = initialState == 1
         advance()
     }
 
@@ -40,25 +40,22 @@ class DotEnvLexer : LexerBase() {
         val ch = buffer[currentPos]
 
         when {
-            // Line break — resets state back to "expecting key"
             ch == '\n' || ch == '\r' -> {
                 currentPos++
                 if (currentPos < endOffset && ch == '\r' && buffer[currentPos] == '\n') {
                     currentPos++
                 }
                 tokenEnd = currentPos
-                currentToken = com.intellij.psi.TokenType.WHITE_SPACE
+                currentToken = DotEnvTypes.NEWLINE
                 afterSeparator = false
             }
 
-            // Comment — only at start of line (not after =)
             ch == '#' && !afterSeparator -> {
                 skipToEol()
                 tokenEnd = currentPos
                 currentToken = DotEnvTypes.COMMENT
             }
 
-            // Whitespace
             (ch == ' ' || ch == '\t') && !afterSeparator -> {
                 while (currentPos < endOffset && (buffer[currentPos] == ' ' || buffer[currentPos] == '\t')) {
                     currentPos++
@@ -67,10 +64,8 @@ class DotEnvLexer : LexerBase() {
                 currentToken = com.intellij.psi.TokenType.WHITE_SPACE
             }
 
-            // Separator — switch to value mode
             (ch == '=' || ch == ':') && !afterSeparator -> {
                 currentPos++
-                // Skip optional whitespace after =
                 while (currentPos < endOffset && (buffer[currentPos] == ' ' || buffer[currentPos] == '\t')) {
                     currentPos++
                 }
@@ -79,29 +74,25 @@ class DotEnvLexer : LexerBase() {
                 afterSeparator = true
             }
 
-            // AFTER = : everything is a value
             afterSeparator -> {
                 if (ch == '"' || ch == '\'') {
-                    // Quoted value
                     val quote = ch
                     currentPos++
                     while (currentPos < endOffset && buffer[currentPos] != quote) {
                         if (buffer[currentPos] == '\\' && currentPos + 1 < endOffset) currentPos++
-                        if (buffer[currentPos] == '\n' || buffer[currentPos] == '\r') break
+                        if (currentPos >= endOffset || buffer[currentPos] == '\n' || buffer[currentPos] == '\r') break
                         currentPos++
                     }
                     if (currentPos < endOffset && buffer[currentPos] == quote) currentPos++
                     tokenEnd = currentPos
                     currentToken = DotEnvTypes.QUOTED_VALUE
                 } else {
-                    // Unquoted value — eat everything to end of line
                     skipToEol()
                     tokenEnd = currentPos
                     currentToken = DotEnvTypes.VALUE
                 }
             }
 
-            // BEFORE = : key or export
             ch.isLetter() || ch == '_' || ch == '.' -> {
                 val wordStart = currentPos
                 while (currentPos < endOffset && (buffer[currentPos].isLetterOrDigit() || buffer[currentPos] == '_' || buffer[currentPos] == '.')) {

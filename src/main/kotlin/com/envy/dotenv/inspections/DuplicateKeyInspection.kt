@@ -21,16 +21,23 @@ class DuplicateKeyInspection : LocalInspectionTool() {
                 val text = file.text
                 val lines = text.lines()
 
+                // Build accurate line start offsets — handles LF, CR, and CRLF
+                val lineStartOffsets = IntArray(lines.size)
+                var pos = 0
+                for (i in lines.indices) {
+                    lineStartOffsets[i] = pos
+                    pos += lines[i].length
+                    if (pos < text.length) {
+                        if (text[pos] == '\r') pos++
+                        if (pos < text.length && text[pos] == '\n') pos++
+                    }
+                }
+
                 // Map of key name -> first line number (1-indexed)
                 val seen = mutableMapOf<String, Int>()
 
-                var currentOffset = 0
-
                 for ((index, line) in lines.withIndex()) {
-                    val lineLength = line.length
-                    val lineStartOffset = currentOffset
-                    currentOffset += lineLength + 1 // +1 for the newline character
-
+                    val lineStartOffset = lineStartOffsets[index]
                     val trimmed = line.trim()
 
                     // Skip comments and blank lines
@@ -51,25 +58,15 @@ class DuplicateKeyInspection : LocalInspectionTool() {
                     val lineNum = index + 1
 
                     if (seen.containsKey(key)) {
-                        // Find the PSI element at this offset to attach the warning
                         val keyOffset = lineStartOffset + line.indexOf(key)
-                        val element = file.findElementAt(keyOffset)
+                        val element = file.findElementAt(keyOffset) ?: continue
 
-                        if (element != null) {
-                            val lineEndOffset = lineStartOffset + line.length
-
-                            val range = com.intellij.openapi.util.TextRange(lineStartOffset, lineEndOffset)
-
-                            val lineElement = file.findElementAt(lineStartOffset)?.parent ?: file
-
-                            holder.registerProblem(
-                                lineElement,
-                                "Duplicate key '$key' - first defined on line ${seen[key]}",
-                                com.intellij.codeInspection.ProblemHighlightType.WARNING,
-                                range.shiftLeft(lineElement.textRange.startOffset),
-                                RemoveDuplicateFix(key, index)
-                            )
-                        }
+                        holder.registerProblem(
+                            element,
+                            "Duplicate key '$key' - first defined on line ${seen[key]}",
+                            com.intellij.codeInspection.ProblemHighlightType.WARNING,
+                            RemoveDuplicateFix(key, index)
+                        )
                     } else {
                         seen[key] = lineNum
                     }

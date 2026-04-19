@@ -58,7 +58,7 @@ class SecretLeakInspection : LocalInspectionTool() {
         private val sensitiveKeyWords = listOf(
             "SECRET", "PASSWORD", "PASSWD", "PWD", "TOKEN", "API_KEY", "APIKEY",
             "PRIVATE_KEY", "CREDENTIAL", "AUTH", "ACCESS_KEY", "CLIENT_SECRET",
-            "ENCRYPTION_KEY", "SIGNING_KEY", "DATABASE_URL", "KEY", "SECRET"
+            "ENCRYPTION_KEY", "SIGNING_KEY", "DATABASE_URL", "KEY"
         )
 
         private val placeholderValues = setOf(
@@ -114,15 +114,23 @@ class SecretLeakInspection : LocalInspectionTool() {
                 val isCommittedFile = fileName in committedFileNames
                 val isGitignored = isFileGitignored(vFile, file.project)
 
+                // Build accurate line start offsets — handles LF, CR, and CRLF
+                val lineStartOffsets = IntArray(lines.size)
+                var pos = 0
+                for (i in lines.indices) {
+                    lineStartOffsets[i] = pos
+                    pos += lines[i].length
+                    if (pos < text.length) {
+                        if (text[pos] == '\r') pos++
+                        if (pos < text.length && text[pos] == '\n') pos++
+                    }
+                }
+
                 // Scan for secrets
                 val secretsFound = mutableListOf<Pair<Int, String>>() // line index, pattern name
 
-                var currentOffset = 0
-
                 for ((index, line) in lines.withIndex()) {
-                    val lineLength = line.length
-                    val lineStartOffset = currentOffset
-                    currentOffset += lineLength + 1
+                    val lineStartOffset = lineStartOffsets[index]
 
                     val trimmed = line.trim()
                     if (trimmed.isEmpty() || trimmed.startsWith("#")) continue
@@ -147,17 +155,14 @@ class SecretLeakInspection : LocalInspectionTool() {
                     if (patternName != null) {
                         secretsFound.add(index to patternName)
 
-                        // Only warn if secrets are in a committed file
                         if (isCommittedFile) {
-                            val lineEnd = lineStartOffset + line.length
-                            val element = file.findElementAt(lineStartOffset)?.parent ?: file
-                            val range = TextRange(lineStartOffset, lineEnd)
+                            val keyOffset = lineStartOffset + line.indexOf(key)
+                            val element = file.findElementAt(keyOffset) ?: continue
 
                             holder.registerProblem(
                                 element,
                                 "$patternName detected in '$key' - this file is typically committed to version control",
                                 ProblemHighlightType.ERROR,
-                                range.shiftLeft(element.textRange.startOffset),
                                 ReplaceWithPlaceholderFix(key, index)
                             )
                         }
@@ -165,15 +170,13 @@ class SecretLeakInspection : LocalInspectionTool() {
                         secretsFound.add(index to "Possible secret (sensitive key name)")
 
                         if (isCommittedFile) {
-                            val lineEnd = lineStartOffset + line.length
-                            val element = file.findElementAt(lineStartOffset)?.parent ?: file
-                            val range = TextRange(lineStartOffset, lineEnd)
+                            val keyOffset = lineStartOffset + line.indexOf(key)
+                            val element = file.findElementAt(keyOffset) ?: continue
 
                             holder.registerProblem(
                                 element,
                                 "Possible credential in '$key' - this file is typically committed to version control",
                                 ProblemHighlightType.ERROR,
-                                range.shiftLeft(element.textRange.startOffset),
                                 ReplaceWithPlaceholderFix(key, index)
                             )
                         }
@@ -182,13 +185,6 @@ class SecretLeakInspection : LocalInspectionTool() {
 
                 // Warn on each secret line if file is not gitignored
                 if (!isGitignored && !isCommittedFile) {
-                    var offset = 0
-                    val lineOffsets = IntArray(lines.size)
-                    for (i in lines.indices) {
-                        lineOffsets[i] = offset
-                        offset += lines[i].length + 1
-                    }
-
                     for ((index, patternName) in secretsFound) {
                         val line = lines[index]
                         val trimmed = line.trim()
@@ -197,16 +193,14 @@ class SecretLeakInspection : LocalInspectionTool() {
                         if (sepIndex <= 0) continue
                         val key = effective.substring(0, sepIndex).trim()
 
-                        val lineStartOffset = lineOffsets[index]
-                        val lineEnd = lineStartOffset + line.length
-                        val element = file.findElementAt(lineStartOffset)?.parent ?: file
-                        val range = TextRange(lineStartOffset, lineEnd)
+                        val lineStartOffset = lineStartOffsets[index]
+                        val keyOffset = lineStartOffset + line.indexOf(key)
+                        val element = file.findElementAt(keyOffset) ?: continue
 
                         holder.registerProblem(
                             element,
                             "$patternName in '$key' - this file is not gitignored",
                             ProblemHighlightType.ERROR,
-                            range.shiftLeft(element.textRange.startOffset),
                             AddToGitignoreFix(fileName)
                         )
                     }

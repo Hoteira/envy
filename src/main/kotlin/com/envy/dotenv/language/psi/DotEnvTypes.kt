@@ -13,5 +13,7 @@ object DotEnvTypes {
     val VALUE = DotEnvTokenType("VALUE")
     val QUOTED_VALUE = DotEnvTokenType("QUOTED_VALUE")
     val EXPORT = DotEnvTokenType("EXPORT")
+    // Separate token for line breaks so PsiBuilder doesn't swallow them as whitespace
+    val NEWLINE = DotEnvTokenType("NEWLINE")
     val ENTRY = DotEnvElementType("ENTRY")
 }

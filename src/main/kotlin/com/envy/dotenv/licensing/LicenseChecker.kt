@@ -49,6 +49,9 @@ object LicenseChecker {
     """.trimIndent()
 
     fun isPaidFeatureAvailable(): Boolean {
+        // Dev-mode bypass: set -Denvy.dev.pro=true in runIde JVM args
+        if (System.getProperty("envy.dev.pro") == "true") return true
+
         var isValid = false
         try {
             val facade = LicensingFacade.getInstance()
@@ -66,12 +69,6 @@ object LicenseChecker {
                             val key = stamp.substring(KEY_PREFIX.length)
                             val parts = key.split("-")
 
-                            if (parts.size >= 4) {
-                                try {
-                                    val decodedLicense = String(Base64.getMimeDecoder().decode(parts[1].toByteArray(StandardCharsets.UTF_8)), StandardCharsets.UTF_8)
-                                } catch(e: Exception) {
-                                }
-                            }
                             val keyValid = isKeyValid(key)
                             if (keyValid) isValid = true
                         }
@@ -118,11 +115,22 @@ object LicenseChecker {
     }
 
     private fun isLicenseServerStampValid(stamp: String): Boolean {
-        return stamp.isNotEmpty()
+        if (stamp.length < 32) return false
+        return try {
+            Base64.getMimeDecoder().decode(stamp)
+            true
+        } catch (e: IllegalArgumentException) {
+            false
+        }
     }
 
     private fun isEvaluationValid(evalInfo: String): Boolean {
-        return evalInfo.isNotEmpty()
+        if (evalInfo.isEmpty()) return false
+        // Eval stamp encodes expiry as milliseconds since epoch
+        val expiry = evalInfo.trim().toLongOrNull()
+        if (expiry != null) return System.currentTimeMillis() < expiry
+        // Unknown format — do not grant access
+        return false
     }
 
     private fun createCertificate(certBase64: String): X509Certificate {

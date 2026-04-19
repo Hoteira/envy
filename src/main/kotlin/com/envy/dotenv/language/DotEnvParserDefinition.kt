@@ -30,9 +30,8 @@ class DotEnvParserDefinition : ParserDefinition {
                     val tokenType = builder.tokenType
                     if (tokenType == DotEnvTypes.KEY || tokenType == DotEnvTypes.EXPORT) {
                         val entry = builder.mark()
-                        // Consume until newline or EOF
-                        while (!builder.eof() && builder.tokenType != com.intellij.psi.TokenType.WHITE_SPACE || 
-                               (builder.tokenType == com.intellij.psi.TokenType.WHITE_SPACE && !builder.tokenText!!.contains("\n") && !builder.tokenText!!.contains("\r"))) {
+                        while (!builder.eof()) {
+                            if (builder.tokenType == DotEnvTypes.NEWLINE) break
                             builder.advanceLexer()
                         }
                         entry.done(DotEnvTypes.ENTRY)
@@ -47,6 +46,8 @@ class DotEnvParserDefinition : ParserDefinition {
     }
 
     override fun getFileNodeType(): IFileElementType = FILE
+    // EMPTY so the parser loop can observe NEWLINE tokens and split entries per line.
+    override fun getWhitespaceTokens(): TokenSet = TokenSet.EMPTY
     override fun getCommentTokens(): TokenSet = TokenSet.create(DotEnvTypes.COMMENT)
     override fun getStringLiteralElements(): TokenSet = TokenSet.EMPTY
 

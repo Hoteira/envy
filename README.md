@@ -16,7 +16,7 @@
 <br>
 
 <!-- Plugin description -->
-EnvY brings better `.env` file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, and a cross-environment diff tool to instantly spot mismatches between your development, staging, and production configs.
+EnvY brings better `.env` file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, a cross-environment diff tool to spot mismatches between environments, and automatic secret folding in presentation mode.
 
 ## Free vs Pro
 
@@ -27,6 +27,8 @@ EnvY brings better `.env` file support to all JetBrains IDEs. Syntax highlightin
 | Cross-environment diff tool window | ✓ | ✓ |
 | Recursive `.env` file discovery | ✓ | ✓ |
 | `.envrc` (direnv) file support | ✓ | ✓ |
+| Secret values hidden in presentation mode | ✓ | ✓ |
+| Quick-fix: reveal hidden key / reveal all | ✓ | ✓ |
 | Secret leak detection | | ✓ |
 | Gitignore verification for secrets | | ✓ |
 | Quick-fix: add to `.gitignore` | | ✓ |

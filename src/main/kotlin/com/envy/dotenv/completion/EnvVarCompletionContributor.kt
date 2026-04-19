@@ -7,6 +7,7 @@ import com.intellij.util.ProcessingContext
 import com.intellij.icons.AllIcons
 import com.envy.dotenv.services.EnvFileService
 import com.envy.dotenv.licensing.LicenseChecker
+import com.envy.dotenv.inspections.SecretLeakInspection
 
 class EnvVarCompletionContributor : CompletionContributor() {
 
@@ -22,40 +23,31 @@ class EnvVarCompletionContributor : CompletionContributor() {
 class EnvVarCompletionProvider : CompletionProvider<CompletionParameters>() {
 
     companion object {
-        // Patterns that indicate the user is accessing an env var
         private val envAccessPatterns = listOf(
-            // JavaScript / TypeScript
+            // JS / TS
             Regex("""process\.env\.(\w*)$"""),
             Regex("""process\.env\[['"](\w*)['"]?\]?$"""),
             Regex("""import\.meta\.env\.(\w*)$"""),
-
             // Python
             Regex("""os\.environ\[['"](\w*)['"]?\]?$"""),
             Regex("""os\.environ\.get\(['"](\w*)['"]?\)?$"""),
             Regex("""os\.getenv\(['"](\w*)['"]?\)?$"""),
-
             // Rust
             Regex("""env::var\(['"](\w*)['"]?\)?$"""),
             Regex("""std::env::var\(['"](\w*)['"]?\)?$"""),
-
             // PHP
             Regex("""getenv\(['"](\w*)['"]?\)?$"""),
             Regex("""\${'$'}_ENV\[['"](\w*)['"]?\]?$"""),
             Regex("""env\(['"](\w*)['"]?\)?$"""),
-
             // Ruby
             Regex("""ENV\[['"](\w*)['"]?\]?$"""),
-
             // Go
             Regex("""os\.Getenv\(['"](\w*)['"]?\)?$"""),
-
             // Java / Kotlin
             Regex("""System\.getenv\(['"](\w*)['"]?\)?$"""),
-
-            // C# / .NET
+            // C#
             Regex("""Environment\.GetEnvironmentVariable\(['"](\w*)['"]?\)?$"""),
-
-            // Generic dotenv usage
+            // generic
             Regex("""dotenv\[['"](\w*)['"]?\]?$""")
         )
     }
@@ -72,16 +64,14 @@ class EnvVarCompletionProvider : CompletionProvider<CompletionParameters>() {
         val document = editor.document
         val offset = parameters.offset
 
-        // Get the text before the cursor on the current line
         val lineNumber = document.getLineNumber(offset)
         val lineStart = document.getLineStartOffset(lineNumber)
         val textBeforeCursor = document.getText(com.intellij.openapi.util.TextRange(lineStart, offset))
 
-        // Check if any env access pattern matches
-        val matches = envAccessPatterns.any { it.containsMatchIn(textBeforeCursor) }
-        if (!matches) return
+        val matchResult = envAccessPatterns.firstNotNullOfOrNull { it.find(textBeforeCursor) }
+        if (matchResult == null) return
+        val prefix = matchResult.groupValues[1]
 
-        // Get all env vars from all .env files
         val service = project.getService(EnvFileService::class.java)
         val envFiles = service.findEnvFiles()
 
@@ -97,15 +87,20 @@ class EnvVarCompletionProvider : CompletionProvider<CompletionParameters>() {
             }
         }
 
-        // Add completions
+        val prefixedResult = result.withPrefixMatcher(prefix)
         for (key in allKeys.sorted()) {
+            if (!key.startsWith(prefix, ignoreCase = true)) continue
             val value = keyValues[key] ?: ""
-            val displayValue = if (value.length > 30) value.take(30) + "..." else value
+            val typeText = if (SecretLeakInspection.isSecret(key, value)) {
+                "***"
+            } else {
+                if (value.length > 30) value.take(30) + "..." else value
+            }
 
-            result.addElement(
+            prefixedResult.addElement(
                 LookupElementBuilder.create(key)
                     .withIcon(AllIcons.Nodes.Variable)
-                    .withTypeText(displayValue, true)
+                    .withTypeText(typeText, true)
                     .withBoldness(true)
             )
         }
