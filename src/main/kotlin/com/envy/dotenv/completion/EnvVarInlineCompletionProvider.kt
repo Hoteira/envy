@@ -4,6 +4,7 @@ import com.intellij.codeInsight.inline.completion.*
 import com.intellij.codeInsight.inline.completion.elements.InlineCompletionGrayTextElement
 import com.intellij.codeInsight.inline.completion.suggestion.InlineCompletionSuggestion
 import com.intellij.codeInsight.inline.completion.suggestion.InlineCompletionVariant
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.util.TextRange
 import com.envy.dotenv.services.EnvFileService
 import com.envy.dotenv.licensing.LicenseChecker
@@ -58,13 +59,10 @@ class EnvVarInlineCompletionProvider : InlineCompletionProvider {
 
         if (!matched) return InlineCompletionSuggestion.Empty
 
-        // Get env vars
+        // Get env vars — must run inside a ReadAction (VFS + index access)
         val service = project.getService(EnvFileService::class.java)
-        val envFiles = service.findEnvFiles()
-
-        val allKeys = mutableSetOf<String>()
-        for (file in envFiles) {
-            allKeys.addAll(service.parseEnvFile(file).keys)
+        val allKeys = readAction {
+            service.findEnvFiles().flatMap { service.parseEnvFile(it).keys }.toSet()
         }
 
         // Find best match
@@ -72,7 +70,7 @@ class EnvVarInlineCompletionProvider : InlineCompletionProvider {
             .firstOrNull { it.startsWith(prefix, ignoreCase = true) && it != prefix }
             ?: return InlineCompletionSuggestion.Empty
 
-        val remaining = suggestion.removePrefix(prefix)
+        val remaining = suggestion.substring(prefix.length)
 
         return object : InlineCompletionSuggestion {
             override suspend fun getVariants(): List<InlineCompletionVariant> {

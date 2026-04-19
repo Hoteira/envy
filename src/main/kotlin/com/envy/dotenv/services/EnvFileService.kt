@@ -17,8 +17,8 @@ class EnvFileService(private val project: Project) {
         val files = FileTypeIndex.getFiles(DotEnvFileType, scope)
         
         return files.filter { file ->
-            val path = file.path
-            !path.contains("/.git/") && !path.contains("/node_modules/")
+            val parts = file.path.split('/')
+            !parts.contains(".git") && !parts.contains("node_modules")
         }.sortedBy { it.path }
     }
 

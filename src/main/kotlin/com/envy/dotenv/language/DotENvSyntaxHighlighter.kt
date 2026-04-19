@@ -31,6 +31,7 @@ class DotEnvSyntaxHighlighter : SyntaxHighlighterBase() {
             DotEnvTypes.COMMENT -> arrayOf(COMMENT)
             DotEnvTypes.SEPARATOR -> arrayOf(SEPARATOR)
             DotEnvTypes.EXPORT -> arrayOf(EXPORT)
+            DotEnvTypes.NEWLINE -> emptyArray()
             TokenType.BAD_CHARACTER -> arrayOf(HighlighterColors.BAD_CHARACTER)
             else -> emptyArray()
         }

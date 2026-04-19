@@ -4,6 +4,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
+import com.intellij.ui.JBColor
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.table.JBTable
 import com.envy.dotenv.services.EnvFileService
@@ -34,14 +35,18 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val table = JBTable(tableModel)
     private var envFiles = mapOf<String, Map<String, String>>()
     private var loading = false
+    private var pendingLoad: java.util.concurrent.Future<*>? = null
 
-    // Row status for coloring
     private val rowStatuses = mutableListOf<RowStatus>()
+
+    private val differBg = JBColor(Color(255, 255, 180), Color(80, 80, 0))
+    private val differFg = JBColor(Color(60, 60, 0), Color.WHITE)
+    private val missingBg = JBColor(Color(255, 220, 220), Color(80, 0, 0))
+    private val missingFg = JBColor(Color(100, 0, 0), Color.WHITE)
 
     enum class RowStatus { MATCH, DIFFER, MISSING_LEFT, MISSING_RIGHT }
 
     init {
-        // Top bar with dropdowns
         val topBar = JPanel()
         topBar.add(JLabel("Compare:"))
         topBar.add(leftCombo)
@@ -54,12 +59,10 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         add(topBar, BorderLayout.NORTH)
 
-        // Table setup
-        table.setDefaultEditor(Any::class.java, null) // read-only
+        table.setDefaultEditor(Any::class.java, null)
         table.autoResizeMode = JTable.AUTO_RESIZE_ALL_COLUMNS
         table.rowHeight = 24
 
-        // Custom renderer for row colors
         val renderer = object : DefaultTableCellRenderer() {
             override fun getTableCellRendererComponent(
                 table: JTable, value: Any?, isSelected: Boolean,
@@ -73,12 +76,12 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
                             comp.foreground = table.foreground
                         }
                         RowStatus.DIFFER -> {
-                            comp.background = Color(80, 80, 0)
-                            comp.foreground = Color.WHITE
+                            comp.background = differBg
+                            comp.foreground = differFg
                         }
                         RowStatus.MISSING_LEFT, RowStatus.MISSING_RIGHT -> {
-                            comp.background = Color(80, 0, 0)
-                            comp.foreground = Color.WHITE
+                            comp.background = missingBg
+                            comp.foreground = missingFg
                         }
                     }
                 }
@@ -89,17 +92,16 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         add(JScrollPane(table), BorderLayout.CENTER)
 
-        // Listen for dropdown changes
         leftCombo.addActionListener { if (!loading) updateDiff() }
         rightCombo.addActionListener { if (!loading) updateDiff() }
 
-        // Load on init
         loadFiles()
     }
 
     private fun loadFiles() {
+        pendingLoad?.cancel(false)
         loading = true
-        com.intellij.openapi.application.ReadAction.nonBlocking(java.util.concurrent.Callable {
+        pendingLoad = com.intellij.openapi.application.ReadAction.nonBlocking(java.util.concurrent.Callable {
             val files = service.findEnvFiles()
             val baseDir = project.guessProjectDir()
             files.associate { file ->
@@ -112,6 +114,7 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
         })
         .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState()) { result ->
+            if (project.isDisposed || !isDisplayable) return@finishOnUiThread
             envFiles = result
             leftCombo.removeAllItems()
             rightCombo.removeAllItems()
@@ -126,6 +129,7 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
                 rightCombo.selectedIndex = 1
             }
             loading = false
+            pendingLoad = null
             updateDiff()
         }
         .submit(com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService())
@@ -137,11 +141,9 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
         val leftMap = envFiles[leftName] ?: return
         val rightMap = envFiles[rightName] ?: return
 
-        // Clear table
         tableModel.rowCount = 0
         rowStatuses.clear()
 
-        // Collect all keys from both files
         val allKeys = (leftMap.keys + rightMap.keys).toSortedSet()
 
         for (key in allKeys) {
@@ -170,7 +172,8 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
             rowStatuses.add(status)
         }
 
-        // Update column headers
-        tableModel.setColumnIdentifiers(arrayOf("Key", leftName, rightName, "Status"))
+        table.columnModel.getColumn(1).headerValue = leftName
+        table.columnModel.getColumn(2).headerValue = rightName
+        table.tableHeader?.repaint()
     }
 }
