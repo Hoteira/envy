@@ -48,48 +48,36 @@ object LicenseChecker {
         -----END CERTIFICATE-----
     """.trimIndent()
 
-    fun isPaidFeatureAvailable(): Boolean {
-        // Dev-mode bypass: set -Denvy.dev.pro=true in runIde JVM args
-        if (System.getProperty("envy.dev.pro") == "true") return true
+    @Volatile private var cachedAvailable: Boolean = false
+    @Volatile private var cacheExpiry: Long = 0L
 
+    fun isPaidFeatureAvailable(): Boolean {
+        if (System.getProperty("envy.dev.pro") == "true") return true
+        val now = System.currentTimeMillis()
+        if (now < cacheExpiry) return cachedAvailable
+        val result = computeAvailability()
+        cachedAvailable = result
+        cacheExpiry = now + 30_000L
+        return result
+    }
+
+    private fun computeAvailability(): Boolean {
         var isValid = false
         try {
-            val facade = LicensingFacade.getInstance()
-
-            if (facade != null) {
-                if (facade.isEvaluationLicense) {
-                    isValid = true
-                }
-                
-                val stamp = facade.getConfirmationStamp(PRODUCT_CODE)
-                
-                if (stamp != null) {
-                    when {
-                        stamp.startsWith(KEY_PREFIX) -> {
-                            val key = stamp.substring(KEY_PREFIX.length)
-                            val parts = key.split("-")
-
-                            val keyValid = isKeyValid(key)
-                            if (keyValid) isValid = true
-                        }
-                        stamp.startsWith(STAMP_PREFIX) -> {
-                            val stampValid = isLicenseServerStampValid(stamp.substring(STAMP_PREFIX.length))
-                            if (stampValid) isValid = true
-                        }
-                        stamp.startsWith(EVAL_PREFIX) -> {
-                            val evalValid = isEvaluationValid(stamp.substring(EVAL_PREFIX.length))
-                            if (evalValid) isValid = true
-                        }
-                        else -> {
-
-                        }
-                    }
+            val facade = LicensingFacade.getInstance() ?: return false
+            if (facade.isEvaluationLicense) isValid = true
+            val stamp = facade.getConfirmationStamp(PRODUCT_CODE)
+            if (stamp != null) {
+                when {
+                    stamp.startsWith(KEY_PREFIX) ->
+                        if (isKeyValid(stamp.substring(KEY_PREFIX.length))) isValid = true
+                    stamp.startsWith(STAMP_PREFIX) ->
+                        if (isLicenseServerStampValid(stamp.substring(STAMP_PREFIX.length))) isValid = true
+                    stamp.startsWith(EVAL_PREFIX) ->
+                        if (isEvaluationValid(stamp.substring(EVAL_PREFIX.length))) isValid = true
                 }
             }
-
-        } catch (e: Exception) {
-        }
-
+        } catch (e: Exception) {}
         return isValid
     }
 

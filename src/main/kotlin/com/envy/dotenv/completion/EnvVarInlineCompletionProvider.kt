@@ -8,6 +8,7 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.util.TextRange
 import com.envy.dotenv.services.EnvFileService
 import com.envy.dotenv.licensing.LicenseChecker
+import com.envy.dotenv.language.DotEnvFileType
 
 class EnvVarInlineCompletionProvider : InlineCompletionProvider {
 
@@ -32,7 +33,9 @@ class EnvVarInlineCompletionProvider : InlineCompletionProvider {
         get() = InlineCompletionProviderID("EnvVarInlineCompletion")
 
     override fun isEnabled(event: InlineCompletionEvent): Boolean {
-        return event is InlineCompletionEvent.DocumentChange && LicenseChecker.isPaidFeatureAvailable()
+        if (event !is InlineCompletionEvent.DocumentChange) return false
+        if (event.editor.virtualFile?.fileType is DotEnvFileType) return false
+        return LicenseChecker.isPaidFeatureAvailable()
     }
 
     override suspend fun getSuggestion(request: InlineCompletionRequest): InlineCompletionSuggestion {
@@ -44,7 +47,6 @@ class EnvVarInlineCompletionProvider : InlineCompletionProvider {
         val lineStart = document.getLineStartOffset(lineNumber)
         val textBeforeCursor = document.getText(TextRange(lineStart, offset))
 
-        // Check if we're in an env access pattern
         var prefix = ""
         var matched = false
 
@@ -59,13 +61,11 @@ class EnvVarInlineCompletionProvider : InlineCompletionProvider {
 
         if (!matched) return InlineCompletionSuggestion.Empty
 
-        // Get env vars — must run inside a ReadAction (VFS + index access)
         val service = project.getService(EnvFileService::class.java)
         val allKeys = readAction {
             service.findEnvFiles().flatMap { service.parseEnvFile(it).keys }.toSet()
         }
 
-        // Find best match
         val suggestion = allKeys.sorted()
             .firstOrNull { it.startsWith(prefix, ignoreCase = true) && it != prefix }
             ?: return InlineCompletionSuggestion.Empty

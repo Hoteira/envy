@@ -8,6 +8,7 @@ import com.intellij.icons.AllIcons
 import com.envy.dotenv.services.EnvFileService
 import com.envy.dotenv.licensing.LicenseChecker
 import com.envy.dotenv.inspections.SecretLeakInspection
+import com.envy.dotenv.language.DotEnvFileType
 
 class EnvVarCompletionContributor : CompletionContributor() {
 
@@ -57,6 +58,7 @@ class EnvVarCompletionProvider : CompletionProvider<CompletionParameters>() {
         context: ProcessingContext,
         result: CompletionResultSet
     ) {
+        if (parameters.originalFile.fileType is DotEnvFileType) return
         if (!LicenseChecker.isPaidFeatureAvailable()) return
 
         val project = parameters.position.project
