@@ -3,71 +3,173 @@ package com.envy.dotenv.services
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.newvfs.BulkFileListener
+import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.psi.search.FileTypeIndex
 import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.event.DocumentListener
+import com.intellij.openapi.editor.event.DocumentEvent
+import com.intellij.openapi.application.ApplicationManager
 import com.envy.dotenv.language.DotEnvFileType
+import java.util.concurrent.ConcurrentHashMap
 
 @Service(Service.Level.PROJECT)
 class EnvFileService(private val project: Project) {
 
-    private val parseCache = java.util.concurrent.ConcurrentHashMap<VirtualFile, Pair<Long, Map<String, String>>>()
+    private val fileKeyValues = ConcurrentHashMap<String, Map<String, String>>()
+    
+    @Volatile private var fileListCache: List<VirtualFile>? = null
+    @Volatile private var allKeysCache: Set<String>? = null
+    @Volatile private var allKeysSortedCache: List<String>? = null
+    @Volatile private var allKeyValuesCache: Map<String, String>? = null
+
+    init {
+        project.messageBus.connect().subscribe(VirtualFileManager.VFS_CHANGES, object : BulkFileListener {
+            override fun after(events: MutableList<out VFileEvent>) {
+                var needsFileListUpdate = false
+                val updatedFiles = mutableListOf<VirtualFile>()
+                
+                for (event in events) {
+                    val path = event.path
+                    if (path.endsWith(".env") || path.contains("/.env.")) {
+                        when (event) {
+                            is com.intellij.openapi.vfs.newvfs.events.VFileCreateEvent,
+                            is com.intellij.openapi.vfs.newvfs.events.VFileDeleteEvent,
+                            is com.intellij.openapi.vfs.newvfs.events.VFilePropertyChangeEvent -> {
+                                needsFileListUpdate = true
+                                fileKeyValues.remove(path)
+                            }
+                            is com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent -> {
+                                event.file?.let { updatedFiles.add(it) }
+                            }
+                        }
+                    }
+                }
+                
+                if (needsFileListUpdate) {
+                    ApplicationManager.getApplication().executeOnPooledThread {
+                        val files = com.intellij.openapi.application.runReadAction<List<VirtualFile>> {
+                            if (project.isDisposed) return@runReadAction emptyList()
+                            FileTypeIndex.getFiles(DotEnvFileType, GlobalSearchScope.projectScope(project)).filter { file ->
+                                val p = file.path
+                                !p.contains("/.git/") && !p.contains("/node_modules/")
+                            }.sortedBy { it.path }
+                        }
+                        fileListCache = files
+                        rebuildGlobalCachesAsync()
+                    }
+                } else if (updatedFiles.isNotEmpty()) {
+                    ApplicationManager.getApplication().executeOnPooledThread {
+                        for (file in updatedFiles) {
+                            parseAndStore(file)
+                        }
+                        rebuildGlobalCachesAsync()
+                    }
+                }
+            }
+        })
+
+        EditorFactory.getInstance().eventMulticaster.addDocumentListener(object : DocumentListener {
+            override fun documentChanged(event: DocumentEvent) {
+                val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
+                val path = file.path
+                if (path.endsWith(".env") || path.contains("/.env.")) {
+                    ApplicationManager.getApplication().executeOnPooledThread {
+                        parseAndStore(file, event.document)
+                        rebuildGlobalCachesAsync()
+                    }
+                }
+            }
+        }, project)
+        
+        // Initial build
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val files = com.intellij.openapi.application.runReadAction<List<VirtualFile>> {
+                if (project.isDisposed) return@runReadAction emptyList()
+                FileTypeIndex.getFiles(DotEnvFileType, GlobalSearchScope.projectScope(project)).filter { file ->
+                    val p = file.path
+                    !p.contains("/.git/") && !p.contains("/node_modules/")
+                }.sortedBy { it.path }
+            }
+            fileListCache = files
+            for (file in files) {
+                parseAndStore(file)
+            }
+            rebuildGlobalCachesAsync()
+        }
+    }
+
+    private fun parseAndStore(file: VirtualFile, document: com.intellij.openapi.editor.Document? = null) {
+        if (!file.isValid) {
+            fileKeyValues.remove(file.path)
+            return
+        }
+        val text = com.intellij.openapi.application.runReadAction<CharSequence?> {
+            if (!file.isValid) return@runReadAction null
+            val doc = document ?: FileDocumentManager.getInstance().getCachedDocument(file)
+            doc?.immutableCharSequence ?: VfsUtilCore.loadText(file)
+        }
+        if (text == null) {
+            fileKeyValues.remove(file.path)
+            return
+        }
+        val parsed = EnvParser.parse(text)
+        val map = parsed.entries.associate { it.key to it.value }
+        fileKeyValues[file.path] = map
+    }
+
+    private fun rebuildGlobalCachesAsync() {
+        val mergedValues = mutableMapOf<String, String>()
+        val allKeys = mutableSetOf<String>()
+        val files = fileListCache ?: emptyList()
+        
+        for (file in files) {
+            val map = fileKeyValues[file.path] ?: continue
+            for ((key, value) in map) {
+                mergedValues.putIfAbsent(key, value)
+                allKeys.add(key)
+            }
+        }
+        
+        allKeyValuesCache = mergedValues
+        allKeysCache = allKeys
+        allKeysSortedCache = allKeys.sortedWith(compareBy({ it.length }, { it }))
+    }
 
     fun findEnvFiles(): List<VirtualFile> {
-        val scope = GlobalSearchScope.projectScope(project)
-
-        val files = FileTypeIndex.getFiles(DotEnvFileType, scope)
-        
-        return files.filter { file ->
-            val parts = file.path.split('/')
-            !parts.contains(".git") && !parts.contains("node_modules")
-        }.sortedBy { it.path }
+        return fileListCache ?: emptyList()
     }
 
     fun parseEnvFile(file: VirtualFile): Map<String, String> {
-        val stamp = file.modificationStamp
-        parseCache[file]?.let { (cachedStamp, result) ->
-            if (cachedStamp == stamp) return result
-        }
-        val result = doParse(file)
-        parseCache[file] = stamp to result
-        return result
+        val existing = fileKeyValues[file.path]
+        if (existing != null) return existing
+
+        if (!file.isValid) return emptyMap()
+        val text = com.intellij.openapi.application.runReadAction<CharSequence?> {
+            if (!file.isValid) return@runReadAction null
+            val doc = FileDocumentManager.getInstance().getCachedDocument(file)
+            doc?.immutableCharSequence ?: VfsUtilCore.loadText(file)
+        } ?: return emptyMap()
+
+        val parsed = EnvParser.parse(text)
+        val map = parsed.entries.associate { it.key to it.value }
+        fileKeyValues[file.path] = map
+        return map
     }
 
-    private fun doParse(file: VirtualFile): Map<String, String> {
-        val result = mutableMapOf<String, String>()
-        val text = VfsUtilCore.loadText(file)
+    fun getAllKeys(): Set<String> {
+        return allKeysCache ?: emptySet()
+    }
 
-        for (line in text.lines()) {
-            val trimmed = line.trim()
-            if (trimmed.isEmpty() || trimmed.startsWith("#")) continue
+    fun getAllKeysSorted(): List<String> {
+        return allKeysSortedCache ?: emptyList()
+    }
 
-            // Handle .envrc export lines: export KEY=value
-            val effective = when {
-                trimmed.startsWith("export ") -> trimmed.removePrefix("export ").trim()
-                // Skip direnv commands that aren't key=value
-                trimmed.startsWith("dotenv") -> continue
-                trimmed.startsWith("source_env") -> continue
-                trimmed.startsWith("source_up") -> continue
-                trimmed.startsWith("layout ") -> continue
-                trimmed.startsWith("use ") -> continue
-                trimmed.startsWith("PATH_add") -> continue
-                trimmed.startsWith("path_add") -> continue
-                trimmed.startsWith("watch_file") -> continue
-                trimmed.startsWith("log_") -> continue
-                else -> trimmed
-            }
-
-            val sepIndex = effective.indexOfFirst { it == '=' || it == ':' }
-            if (sepIndex <= 0) continue
-
-            val key = effective.substring(0, sepIndex).trim()
-            val value = effective.substring(sepIndex + 1).trim()
-                .removeSurrounding("\"")
-                .removeSurrounding("'")
-
-            result[key] = value
-        }
-        return result
+    fun getAllKeyValues(): Map<String, String> {
+        return allKeyValuesCache ?: emptyMap()
     }
 }

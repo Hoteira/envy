@@ -75,12 +75,13 @@ class DotEnvLexer : LexerBase() {
             }
 
             afterSeparator -> {
-                if (ch == '"' || ch == '\'') {
+                if (ch == '"' || ch == '\'' || ch == '`') {
                     val quote = ch
+                    val allowMultiline = quote == '"'
                     currentPos++
                     while (currentPos < endOffset && buffer[currentPos] != quote) {
                         if (buffer[currentPos] == '\\' && currentPos + 1 < endOffset) currentPos++
-                        if (currentPos >= endOffset || buffer[currentPos] == '\n' || buffer[currentPos] == '\r') break
+                        if (!allowMultiline && (buffer[currentPos] == '\n' || buffer[currentPos] == '\r')) break
                         currentPos++
                     }
                     if (currentPos < endOffset && buffer[currentPos] == quote) currentPos++
