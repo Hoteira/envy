@@ -44,7 +44,7 @@ class EnvFileService(private val project: Project) {
                                 fileKeyValues.remove(path)
                             }
                             is com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent -> {
-                                event.file?.let { updatedFiles.add(it) }
+                                updatedFiles.add(event.file)
                             }
                         }
                     }
@@ -52,13 +52,13 @@ class EnvFileService(private val project: Project) {
                 
                 if (needsFileListUpdate) {
                     ApplicationManager.getApplication().executeOnPooledThread {
-                        val files = com.intellij.openapi.application.runReadAction<List<VirtualFile>> {
-                            if (project.isDisposed) return@runReadAction emptyList()
+                        val files = ApplicationManager.getApplication().runReadAction(com.intellij.openapi.util.Computable<List<VirtualFile>> {
+                            if (project.isDisposed) return@Computable emptyList()
                             FileTypeIndex.getFiles(DotEnvFileType, GlobalSearchScope.projectScope(project)).filter { file ->
                                 val p = file.path
                                 !p.contains("/.git/") && !p.contains("/node_modules/")
                             }.sortedBy { it.path }
-                        }
+                        })
                         fileListCache = files
                         rebuildGlobalCachesAsync()
                     }
@@ -88,13 +88,13 @@ class EnvFileService(private val project: Project) {
         
         // Initial build
         ApplicationManager.getApplication().executeOnPooledThread {
-            val files = com.intellij.openapi.application.runReadAction<List<VirtualFile>> {
-                if (project.isDisposed) return@runReadAction emptyList()
+            val files = ApplicationManager.getApplication().runReadAction(com.intellij.openapi.util.Computable<List<VirtualFile>> {
+                if (project.isDisposed) return@Computable emptyList()
                 FileTypeIndex.getFiles(DotEnvFileType, GlobalSearchScope.projectScope(project)).filter { file ->
                     val p = file.path
                     !p.contains("/.git/") && !p.contains("/node_modules/")
                 }.sortedBy { it.path }
-            }
+            })
             fileListCache = files
             for (file in files) {
                 parseAndStore(file)
@@ -108,11 +108,11 @@ class EnvFileService(private val project: Project) {
             fileKeyValues.remove(file.path)
             return
         }
-        val text = com.intellij.openapi.application.runReadAction<CharSequence?> {
-            if (!file.isValid) return@runReadAction null
+        val text = ApplicationManager.getApplication().runReadAction(com.intellij.openapi.util.Computable<CharSequence?> {
+            if (!file.isValid) return@Computable null
             val doc = document ?: FileDocumentManager.getInstance().getCachedDocument(file)
             doc?.immutableCharSequence ?: VfsUtilCore.loadText(file)
-        }
+        })
         if (text == null) {
             fileKeyValues.remove(file.path)
             return
@@ -149,11 +149,11 @@ class EnvFileService(private val project: Project) {
         if (existing != null) return existing
 
         if (!file.isValid) return emptyMap()
-        val text = com.intellij.openapi.application.runReadAction<CharSequence?> {
-            if (!file.isValid) return@runReadAction null
+        val text = ApplicationManager.getApplication().runReadAction(com.intellij.openapi.util.Computable<CharSequence?> {
+            if (!file.isValid) return@Computable null
             val doc = FileDocumentManager.getInstance().getCachedDocument(file)
             doc?.immutableCharSequence ?: VfsUtilCore.loadText(file)
-        } ?: return emptyMap()
+        }) ?: return emptyMap()
 
         val parsed = EnvParser.parse(text)
         val map = parsed.entries.associate { it.key to it.value }

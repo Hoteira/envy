@@ -18,7 +18,7 @@ version = providers.gradleProperty("pluginVersion").get()
 kotlin {
     jvmToolchain(21)
     compilerOptions {
-        freeCompilerArgs.add("-jvm-default=enable")
+        freeCompilerArgs.add("-jvm-default=no-compatibility")
     }
 }
 

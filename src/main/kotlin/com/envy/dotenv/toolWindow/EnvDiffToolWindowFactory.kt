@@ -22,8 +22,6 @@ class EnvDiffToolWindowFactory : ToolWindowFactory {
         val content = ContentFactory.getInstance().createContent(panel, "Env Diff", false)
         toolWindow.contentManager.addContent(content)
     }
-
-    override fun shouldBeAvailable(project: Project): Boolean = true
 }
 
 class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {

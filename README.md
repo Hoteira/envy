@@ -74,7 +74,7 @@ Full support for `.envrc` files used by direnv. Environment variables defined wi
 
 ### Env Var Autocomplete (Pro)
 
-Context-aware autocomplete for environment variable access patterns across 10+ languages — JavaScript, Python, Rust, PHP, Ruby, Go, Java, Kotlin, C#, and more. Includes inline ghost completion with Tab to accept.
+Context-aware autocomplete for environment variable access patterns across 10+ languages — JavaScript, Python, Rust, PHP, Ruby, Go, Java, Kotlin, C#, and more. Includes **zero-latency inline ghost completion** (Tab to accept) powered by an asynchronous, garbage-collection-optimized caching engine that updates the exact millisecond you type.
 
 ## Installation
 
