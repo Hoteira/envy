@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.2.2]
+## [2.3.0]
 ### Performance & UX
 - Drastically reduced typing latency in large `.env` files by implementing LRU caching for Regex evaluations and `isSecret` checks.
 - Eliminated severe UI thread freezes in the `EnvDiffToolWindow` by batching table model additions and executing a single UI repaint.
