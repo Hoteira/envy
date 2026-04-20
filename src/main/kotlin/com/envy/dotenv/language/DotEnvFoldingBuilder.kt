@@ -49,5 +49,11 @@ class DotEnvFoldingBuilder : FoldingBuilderEx() {
 
     override fun getPlaceholderText(node: ASTNode): String = "***"
 
-    override fun isCollapsedByDefault(node: ASTNode): Boolean = UISettings.getInstance().presentationMode
+    override fun isCollapsedByDefault(node: ASTNode): Boolean {
+        if (!UISettings.getInstance().presentationMode) return false
+        val file = node.psi.containingFile?.virtualFile ?: return true
+        val project = node.psi.project
+        val state = project.getService(com.envy.dotenv.services.PresentationModeState::class.java)
+        return !state.isRevealed(file, node.startOffset)
+    }
 }

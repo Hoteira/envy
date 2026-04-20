@@ -10,6 +10,7 @@ import com.envy.dotenv.licensing.LicenseChecker
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.project.guessProjectDir
+import com.envy.dotenv.services.PsiEnvExtractor
 
 class AddToGitignoreFix(private val fileName: String) : com.intellij.codeInspection.LocalQuickFix {
     override fun getName(): String = "Add '$fileName' to .gitignore"
@@ -21,7 +22,6 @@ class AddToGitignoreFix(private val fileName: String) : com.intellij.codeInspect
         com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) {
             val gitignore = baseDir.findChild(".gitignore")
             if (gitignore != null) {
-                // Append to existing .gitignore
                 val doc = com.intellij.psi.PsiDocumentManager.getInstance(project)
                     .getDocument(com.intellij.psi.PsiManager.getInstance(project).findFile(gitignore) ?: return@runWriteCommandAction)
                     ?: return@runWriteCommandAction
@@ -31,7 +31,6 @@ class AddToGitignoreFix(private val fileName: String) : com.intellij.codeInspect
                 doc.insertString(doc.textLength, "$newLine$fileName\n")
                 com.intellij.psi.PsiDocumentManager.getInstance(project).commitDocument(doc)
             } else {
-                // Create .gitignore
                 baseDir.createChildData(this, ".gitignore").setBinaryContent(
                     "$fileName\n".toByteArray(Charsets.UTF_8)
                 )
@@ -62,16 +61,37 @@ class SecretLeakInspection : LocalInspectionTool() {
         )
 
         private val placeholderValues = setOf(
-            "", "changeme", "change_me", "xxx", "your_key_here", "TODO",
+            "", "changeme", "change_me", "xxx", "your_key_here", "todo",
             "replace_me", "placeholder", "null", "none", "undefined"
         )
 
+        private val patternCache = com.intellij.util.containers.ContainerUtil.createConcurrentSoftValueMap<String, String>()
+        private val isSecretCache = com.intellij.util.containers.ContainerUtil.createConcurrentSoftValueMap<String, Boolean>()
+
         fun getSecretPatternName(value: String): String? {
-            return secretPatterns.find { it.regex.containsMatchIn(value) }?.name
+            if (value.isEmpty()) return null
+            
+            val cached = patternCache[value]
+            if (cached != null) return if (cached.isEmpty()) null else cached
+            
+            val found = secretPatterns.find { it.regex.containsMatchIn(value) }?.name ?: ""
+            patternCache[value] = found
+            return if (found.isEmpty()) null else found
         }
 
         fun isSecret(key: String, value: String): Boolean {
             if (value.isEmpty()) return false
+            
+            val cacheKey = "$key:$value"
+            val cached = isSecretCache[cacheKey]
+            if (cached != null) return cached
+
+            val result = computeIsSecret(key, value)
+            isSecretCache[cacheKey] = result
+            return result
+        }
+
+        private fun computeIsSecret(key: String, value: String): Boolean {
             if (getSecretPatternName(value) != null) return true
 
             val upperKey = key.uppercase()
@@ -91,7 +111,6 @@ class SecretLeakInspection : LocalInspectionTool() {
     override fun getShortName(): String = "DotEnvSecretLeak"
     override fun isEnabledByDefault(): Boolean = true
 
-    // Files that are typically committed to version control
     private val committedFileNames = setOf(
         ".env.example",
         ".env.template",
@@ -108,98 +127,48 @@ class SecretLeakInspection : LocalInspectionTool() {
 
                 val vFile = file.virtualFile ?: return
                 val fileName = vFile.name
-                val text = file.text
-                val lines = text.lines()
 
                 val isCommittedFile = fileName in committedFileNames
                 val isGitignored = isFileGitignored(vFile, file.project)
 
-                // Build accurate line start offsets — handles LF, CR, and CRLF
-                val lineStartOffsets = IntArray(lines.size)
-                var pos = 0
-                for (i in lines.indices) {
-                    lineStartOffsets[i] = pos
-                    pos += lines[i].length
-                    if (pos < text.length) {
-                        if (text[pos] == '\r') pos++
-                        if (pos < text.length && text[pos] == '\n') pos++
-                    }
-                }
+                val entries = PsiEnvExtractor.extractEntries(file)
 
                 // Scan for secrets
-                val secretsFound = mutableListOf<Pair<Int, String>>() // line index, pattern name
+                val secretEntries = mutableListOf<Pair<PsiEnvExtractor.PsiEnvEntry, String>>()
 
-                for ((index, line) in lines.withIndex()) {
-                    val lineStartOffset = lineStartOffsets[index]
-
-                    val trimmed = line.trim()
-                    if (trimmed.isEmpty() || trimmed.startsWith("#")) continue
-
-                    val effective = if (trimmed.startsWith("export ")) {
-                        trimmed.removePrefix("export ").trim()
-                    } else {
-                        trimmed
-                    }
-
-                    val sepIndex = effective.indexOfFirst { it == '=' || it == ':' }
-                    if (sepIndex <= 0) continue
-
-                    val key = effective.substring(0, sepIndex).trim()
-                    val value = effective.substring(sepIndex + 1).trim()
-                        .removeSurrounding("\"")
-                        .removeSurrounding("'")
-
-                    if (value.isEmpty()) continue
-
-                    val patternName = getSecretPatternName(value)
+                for (entry in entries) {
+                    val patternName = getSecretPatternName(entry.value)
                     if (patternName != null) {
-                        secretsFound.add(index to patternName)
+                        secretEntries.add(entry to patternName)
 
                         if (isCommittedFile) {
-                            val keyOffset = lineStartOffset + line.indexOf(key)
-                            val element = file.findElementAt(keyOffset) ?: continue
-
                             holder.registerProblem(
-                                element,
-                                "$patternName detected in '$key' - this file is typically committed to version control",
+                                entry.keyNode.psi,
+                                "$patternName detected in '${entry.key}' - this file is typically committed to version control",
                                 ProblemHighlightType.ERROR,
-                                ReplaceWithPlaceholderFix(key, index)
+                                ReplaceWithPlaceholderFix(entry.key, entry.keyNode.startOffset)
                             )
                         }
-                    } else if (isSecret(key, value)) {
-                        secretsFound.add(index to "Possible secret (sensitive key name)")
+                    } else if (isSecret(entry.key, entry.value)) {
+                        secretEntries.add(entry to "Possible secret (sensitive key name)")
 
                         if (isCommittedFile) {
-                            val keyOffset = lineStartOffset + line.indexOf(key)
-                            val element = file.findElementAt(keyOffset) ?: continue
-
                             holder.registerProblem(
-                                element,
-                                "Possible credential in '$key' - this file is typically committed to version control",
+                                entry.keyNode.psi,
+                                "Possible credential in '${entry.key}' - this file is typically committed to version control",
                                 ProblemHighlightType.ERROR,
-                                ReplaceWithPlaceholderFix(key, index)
+                                ReplaceWithPlaceholderFix(entry.key, entry.keyNode.startOffset)
                             )
                         }
                     }
                 }
 
-                // Warn on each secret line if file is not gitignored
+                // Warn on each secret if file is not gitignored
                 if (!isGitignored && !isCommittedFile) {
-                    for ((index, patternName) in secretsFound) {
-                        val line = lines[index]
-                        val trimmed = line.trim()
-                        val effective = if (trimmed.startsWith("export ")) trimmed.removePrefix("export ").trim() else trimmed
-                        val sepIndex = effective.indexOfFirst { it == '=' || it == ':' }
-                        if (sepIndex <= 0) continue
-                        val key = effective.substring(0, sepIndex).trim()
-
-                        val lineStartOffset = lineStartOffsets[index]
-                        val keyOffset = lineStartOffset + line.indexOf(key)
-                        val element = file.findElementAt(keyOffset) ?: continue
-
+                    for ((entry, patternName) in secretEntries) {
                         holder.registerProblem(
-                            element,
-                            "$patternName in '$key' - this file is not gitignored",
+                            entry.keyNode.psi,
+                            "$patternName in '${entry.key}' - this file is not gitignored",
                             ProblemHighlightType.ERROR,
                             AddToGitignoreFix(fileName)
                         )
@@ -216,7 +185,7 @@ class SecretLeakInspection : LocalInspectionTool() {
     data class SecretPattern(val name: String, val regex: Regex)
 }
 
-class ReplaceWithPlaceholderFix(private val key: String, private val lineIndex: Int) : com.intellij.codeInspection.LocalQuickFix {
+class ReplaceWithPlaceholderFix(private val key: String, private val keyOffset: Int) : com.intellij.codeInspection.LocalQuickFix {
     override fun getName(): String = "Replace with placeholder"
     override fun getFamilyName(): String = "DotEnv"
 
@@ -224,8 +193,7 @@ class ReplaceWithPlaceholderFix(private val key: String, private val lineIndex: 
         val file = descriptor.psiElement?.containingFile ?: return
         val document = com.intellij.psi.PsiDocumentManager.getInstance(project).getDocument(file) ?: return
 
-        if (lineIndex < 0 || lineIndex >= document.lineCount) return
-
+        val lineIndex = document.getLineNumber(keyOffset)
         val lineStart = document.getLineStartOffset(lineIndex)
         val lineEnd = document.getLineEndOffset(lineIndex)
         val lineText = document.getText(TextRange(lineStart, lineEnd))

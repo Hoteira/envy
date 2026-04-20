@@ -145,6 +145,8 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
         rowStatuses.clear()
 
         val allKeys = (leftMap.keys + rightMap.keys).toSortedSet()
+        val rowData = Array(allKeys.size) { emptyArray<Any>() }
+        var rowIndex = 0
 
         for (key in allKeys) {
             val leftVal = leftMap[key]
@@ -163,17 +165,19 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
                 RowStatus.MISSING_LEFT, RowStatus.MISSING_RIGHT -> "MISSING"
             }
 
-            tableModel.addRow(arrayOf(
+            rowData[rowIndex++] = arrayOf(
                 key,
                 leftVal ?: "-",
                 rightVal ?: "-",
                 statusText
-            ))
+            )
             rowStatuses.add(status)
         }
 
+        tableModel.setDataVector(rowData, arrayOf("Key", leftName, rightName, "Status"))
         table.columnModel.getColumn(1).headerValue = leftName
         table.columnModel.getColumn(2).headerValue = rightName
         table.tableHeader?.repaint()
     }
+
 }

@@ -24,6 +24,9 @@ class EnvVarCompletionContributor : CompletionContributor() {
 class EnvVarCompletionProvider : CompletionProvider<CompletionParameters>() {
 
     companion object {
+        // Quick-check keywords — if none appear in the line, skip regex matching entirely
+        private val quickCheckKeywords = arrayOf("env", "ENV", "os.", "getenv", "Getenv", "dotenv", "process", "import.meta")
+
         private val envAccessPatterns = listOf(
             // JS / TS
             Regex("""process\.env\.(\w*)$"""),
@@ -70,27 +73,19 @@ class EnvVarCompletionProvider : CompletionProvider<CompletionParameters>() {
         val lineStart = document.getLineStartOffset(lineNumber)
         val textBeforeCursor = document.getText(com.intellij.openapi.util.TextRange(lineStart, offset))
 
+        // Early exit: skip regex matching if no relevant keyword in the line
+        if (quickCheckKeywords.none { textBeforeCursor.contains(it) }) return
+
         val matchResult = envAccessPatterns.firstNotNullOfOrNull { it.find(textBeforeCursor) }
-        if (matchResult == null) return
+            ?: return
         val prefix = matchResult.groupValues[1]
 
         val service = project.getService(EnvFileService::class.java)
-        val envFiles = service.findEnvFiles()
-
-        val allKeys = mutableSetOf<String>()
-        val keyValues = mutableMapOf<String, String>()
-
-        for (file in envFiles) {
-            val parsed = service.parseEnvFile(file)
-            for ((key, value) in parsed) {
-                if (allKeys.add(key)) {
-                    keyValues[key] = value
-                }
-            }
-        }
+        val keyValues = service.getAllKeyValues()
+        val sortedKeys = service.getAllKeysSorted()
 
         val prefixedResult = result.withPrefixMatcher(prefix)
-        for (key in allKeys.sorted()) {
+        for (key in sortedKeys) {
             if (!key.startsWith(prefix, ignoreCase = true)) continue
             val value = keyValues[key] ?: ""
             val typeText = if (SecretLeakInspection.isSecret(key, value)) {

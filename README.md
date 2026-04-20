@@ -9,14 +9,14 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF.svg?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
 
-<sub> Syntax Highlighting • Duplicate Detection • Cross-Environment Diff • .envrc Support</sub>
+<sub> Syntax Highlighting &bull; Duplicate Detection &bull; Secret Leak Protection &bull; Cross-Environment Diff &bull; .envrc Support</sub>
 
 </div>
 
 <br>
 
 <!-- Plugin description -->
-EnvY brings better `.env` file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, a cross-environment diff tool to spot mismatches between environments, and automatic secret folding in presentation mode.
+EnvY brings first-class `.env` file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, secret leak protection, a cross-environment diff tool to spot mismatches between environments, and automatic secret folding in presentation mode.
 
 ## Free vs Pro
 
@@ -48,9 +48,9 @@ Full syntax highlighting for `.env` files — keys, values, comments, quoted str
 
 **Supports any `.env.*` variant.**
 
-### Duplicate Key Detection in production.
+### Duplicate Key Detection
 
-Flags duplicate keys with inline warnings. When the same variable appears twice, only the last value takes effect — EnvY catches this before it messes you up in production.
+Flags duplicate keys with inline warnings. When the same variable appears twice, only the last value takes effect — EnvY catches this before it causes issues in production.
 
 ### Cross-Environment Diff
 
@@ -60,10 +60,21 @@ A dedicated tool window for comparing environment files side by side. Select any
 - **Value mismatches** — same key, different values across environments
 - **Matching entries** — confirmation that configs are synced
 
+### Secret Leak Protection (Pro)
+
+Detects hardcoded secrets — AWS keys, Stripe keys, GitHub tokens, JWTs, and more — with regex pattern matching and key name heuristics. Warns when `.env` files containing secrets are not gitignored, with one-click quick-fixes to add them to `.gitignore` or replace values with placeholders.
+
+### Presentation Mode
+
+Secret values automatically fold to `***` when presentation mode is enabled. No configuration needed — EnvY detects sensitive keys and hides their values. Use the quick-fix gutter actions to reveal individual keys or all values at once.
+
 ### .envrc / direnv Support
 
 Full support for `.envrc` files used by direnv. Environment variables defined with `export` are parsed and included automatically.
 
+### Env Var Autocomplete (Pro)
+
+Context-aware autocomplete for environment variable access patterns across 10+ languages — JavaScript, Python, Rust, PHP, Ruby, Go, Java, Kotlin, C#, and more. Includes inline ghost completion with Tab to accept.
 
 ## Installation
 
@@ -75,9 +86,10 @@ Full support for `.envrc` files used by direnv. Environment variables defined wi
 
 - [x] Secret leak detection (API keys, tokens, passwords)
 - [x] Env var autocomplete in code
-- [ ] Env dashboard (all vars across all files)
 - [x] Recursive `.env` file discovery in subdirectories
 - [x] `.envrc` (direnv) file support
+- [x] Presentation mode secret folding
+- [ ] Env dashboard (all vars across all files)
 
 ## License
 

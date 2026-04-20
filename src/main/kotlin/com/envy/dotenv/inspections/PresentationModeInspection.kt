@@ -74,10 +74,15 @@ class RevealSecretFix(private val key: String, private val valueOffset: Int) : L
         val editor = FileEditorManager.getInstance(project)
             .getEditors(vFile).filterIsInstance<TextEditor>().firstOrNull()?.editor ?: return
 
+        val state = project.getService(com.envy.dotenv.services.PresentationModeState::class.java)
+
         editor.foldingModel.runBatchFoldingOperation {
             editor.foldingModel.allFoldRegions
                 .filter { it.placeholderText == "***" && valueOffset in it.startOffset..it.endOffset }
-                .forEach { it.isExpanded = true }
+                .forEach { 
+                    it.isExpanded = true
+                    state.markRevealed(vFile, editor.document, it.startOffset, it.endOffset)
+                }
         }
     }
 }
@@ -91,10 +96,19 @@ class RevealAllSecretsFix : LocalQuickFix {
         val editor = FileEditorManager.getInstance(project)
             .getEditors(vFile).filterIsInstance<TextEditor>().firstOrNull()?.editor ?: return
 
+        val state = project.getService(com.envy.dotenv.services.PresentationModeState::class.java)
+
         editor.foldingModel.runBatchFoldingOperation {
+            val revealedOffsets = mutableListOf<Pair<Int, Int>>()
             editor.foldingModel.allFoldRegions
                 .filter { it.placeholderText == "***" && !it.isExpanded }
-                .forEach { it.isExpanded = true }
+                .forEach { 
+                    it.isExpanded = true
+                    revealedOffsets.add(Pair(it.startOffset, it.endOffset))
+                }
+            if (revealedOffsets.isNotEmpty()) {
+                state.markAllRevealed(vFile, editor.document, revealedOffsets)
+            }
         }
     }
 }

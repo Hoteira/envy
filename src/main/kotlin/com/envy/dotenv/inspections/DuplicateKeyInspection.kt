@@ -2,9 +2,12 @@ package com.envy.dotenv.inspections
 
 import com.intellij.codeInspection.LocalInspectionTool
 import com.intellij.codeInspection.ProblemsHolder
+import com.intellij.codeInspection.ProblemHighlightType
+import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElementVisitor
 import com.intellij.psi.PsiFile
 import com.envy.dotenv.language.psi.DotEnvFile
+import com.envy.dotenv.services.PsiEnvExtractor
 
 class DuplicateKeyInspection : LocalInspectionTool() {
 
@@ -18,57 +21,24 @@ class DuplicateKeyInspection : LocalInspectionTool() {
             override fun visitFile(file: PsiFile) {
                 if (file !is DotEnvFile) return
 
-                val text = file.text
-                val lines = text.lines()
+                val entries = PsiEnvExtractor.extractEntries(file)
+                val seen = mutableMapOf<String, Int>() // key -> first occurrence (1-indexed line)
 
-                // Build accurate line start offsets — handles LF, CR, and CRLF
-                val lineStartOffsets = IntArray(lines.size)
-                var pos = 0
-                for (i in lines.indices) {
-                    lineStartOffsets[i] = pos
-                    pos += lines[i].length
-                    if (pos < text.length) {
-                        if (text[pos] == '\r') pos++
-                        if (pos < text.length && text[pos] == '\n') pos++
-                    }
-                }
+                for (entry in entries) {
+                    val document = holder.manager.project.let {
+                        com.intellij.psi.PsiDocumentManager.getInstance(it).getDocument(file)
+                    } ?: return
+                    val lineNum = document.getLineNumber(entry.keyNode.startOffset) + 1
 
-                // Map of key name -> first line number (1-indexed)
-                val seen = mutableMapOf<String, Int>()
-
-                for ((index, line) in lines.withIndex()) {
-                    val lineStartOffset = lineStartOffsets[index]
-                    val trimmed = line.trim()
-
-                    // Skip comments and blank lines
-                    if (trimmed.isEmpty() || trimmed.startsWith("#")) continue
-
-                    // Strip optional "export " prefix
-                    val effective = if (trimmed.startsWith("export ")) {
-                        trimmed.removePrefix("export ").trim()
-                    } else {
-                        trimmed
-                    }
-
-                    // Extract key (everything before = or :)
-                    val sepIndex = effective.indexOfFirst { it == '=' || it == ':' }
-                    if (sepIndex <= 0) continue
-
-                    val key = effective.substring(0, sepIndex).trim()
-                    val lineNum = index + 1
-
-                    if (seen.containsKey(key)) {
-                        val keyOffset = lineStartOffset + line.indexOf(key)
-                        val element = file.findElementAt(keyOffset) ?: continue
-
+                    if (seen.containsKey(entry.key)) {
                         holder.registerProblem(
-                            element,
-                            "Duplicate key '$key' - first defined on line ${seen[key]}",
-                            com.intellij.codeInspection.ProblemHighlightType.WARNING,
-                            RemoveDuplicateFix(key, index)
+                            entry.keyNode.psi,
+                            "Duplicate key '${entry.key}' - first defined on line ${seen[entry.key]}",
+                            ProblemHighlightType.WARNING,
+                            RemoveDuplicateFix(entry.key, lineNum - 1)
                         )
                     } else {
-                        seen[key] = lineNum
+                        seen[entry.key] = lineNum
                     }
                 }
             }
@@ -88,7 +58,16 @@ class RemoveDuplicateFix(private val key: String, private val lineIndex: Int) : 
 
         val lineStart = document.getLineStartOffset(lineIndex)
         val lineEnd = document.getLineEndOffset(lineIndex)
-        val deleteEnd = if (lineEnd < document.textLength && document.text[lineEnd] == '\n') lineEnd + 1 else lineEnd
+
+        val chars = document.charsSequence
+        val textLength = document.textLength
+
+        // Handle both \n and \r\n line endings
+        val deleteEnd = when {
+            lineEnd + 1 < textLength && chars[lineEnd] == '\r' && chars[lineEnd + 1] == '\n' -> lineEnd + 2
+            lineEnd < textLength && (chars[lineEnd] == '\n' || chars[lineEnd] == '\r') -> lineEnd + 1
+            else -> lineEnd
+        }
 
         com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) {
             document.deleteString(lineStart, deleteEnd)

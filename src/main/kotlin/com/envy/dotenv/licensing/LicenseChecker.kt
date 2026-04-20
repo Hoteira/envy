@@ -1,5 +1,6 @@
 package com.envy.dotenv.licensing
 
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.ui.LicensingFacade
 import java.security.Signature
 import java.security.cert.*
@@ -9,6 +10,7 @@ import java.util.Base64
 
 object LicenseChecker {
 
+    private val LOG = Logger.getInstance(LicenseChecker::class.java)
     private const val PRODUCT_CODE = "PENVY"
 
     private const val KEY_PREFIX = "key:"
@@ -50,15 +52,27 @@ object LicenseChecker {
 
     @Volatile private var cachedAvailable: Boolean = false
     @Volatile private var cacheExpiry: Long = 0L
+    @Volatile private var isChecking: Boolean = false
 
     fun isPaidFeatureAvailable(): Boolean {
         if (System.getProperty("envy.dev.pro") == "true") return true
         val now = System.currentTimeMillis()
         if (now < cacheExpiry) return cachedAvailable
-        val result = computeAvailability()
-        cachedAvailable = result
-        cacheExpiry = now + 30_000L
-        return result
+        
+        if (!isChecking) {
+            isChecking = true
+            com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+                try {
+                    val result = computeAvailability()
+                    cachedAvailable = result
+                    cacheExpiry = System.currentTimeMillis() + 30_000L
+                } finally {
+                    isChecking = false
+                }
+            }
+        }
+        
+        return cachedAvailable
     }
 
     private fun computeAvailability(): Boolean {
@@ -77,7 +91,9 @@ object LicenseChecker {
                         if (isEvaluationValid(stamp.substring(EVAL_PREFIX.length))) isValid = true
                 }
             }
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+            LOG.debug("License check failed", e)
+        }
         return isValid
     }
 
