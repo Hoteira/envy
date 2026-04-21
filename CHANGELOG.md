@@ -1,13 +1,18 @@
 # Changelog
 
 
-## [2.3.2]
+## [2.4.1]
+- Small optimizations
+- Stress tests with 1000+ ENV variables
+
+## [2.4.0]
 ### Dynamic Plugin Loading
 - Plugin can now be enabled, disabled, and updated without restarting the IDE
 ### 1k Downloads Gift
 - Standard code completion has become a free feature to celebrate teh first 1k downloads!
 ### Licensing
 - Final license checking integrating the default JetBrains template with async execution
+### Diff Tool UI Bug Fix
 
 ## [2.3.1]
 ### UI & Behavior
