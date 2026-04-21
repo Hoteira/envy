@@ -4,6 +4,7 @@
 ## [2.4.1]
 - Small optimizations
 - Stress tests with 1000+ ENV variables
+- Live dynamic load test
 
 ## [2.4.0]
 ### Dynamic Plugin Loading
