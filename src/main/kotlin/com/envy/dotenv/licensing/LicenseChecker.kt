@@ -16,6 +16,7 @@ object LicenseChecker {
 
     private const val KEY_PREFIX = "key:"
     private const val STAMP_PREFIX = "stamp:"
+    private const val EVAL_PREFIX = "eval:"
 
     private const val TIMESTAMP_VALIDITY_PERIOD_MS = 60 * 60 * 1000L // 1 hour
 
@@ -120,6 +121,7 @@ object LicenseChecker {
             return when {
                 stamp.startsWith(KEY_PREFIX) -> isKeyValid(stamp.substring(KEY_PREFIX.length))
                 stamp.startsWith(STAMP_PREFIX) -> isLicenseServerStampValid(stamp.substring(STAMP_PREFIX.length))
+                stamp.startsWith(EVAL_PREFIX) -> isEvaluationValid(stamp.substring(EVAL_PREFIX.length))
                 else -> false
             }
         } catch (e: Exception) {
@@ -158,6 +160,16 @@ object LicenseChecker {
             return licenseData.contains("\"licenseId\":\"$licenseId\"")
         } catch (e: Throwable) {
             LOG.debug("Key validation failed", e)
+        }
+        return false
+    }
+
+    private fun isEvaluationValid(expirationStr: String): Boolean {
+        try {
+            val expirationMs = expirationStr.toLong()
+            return System.currentTimeMillis() < expirationMs
+        } catch (e: Exception) {
+            LOG.debug("Evaluation stamp validation failed", e)
         }
         return false
     }

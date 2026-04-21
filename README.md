@@ -40,6 +40,16 @@ EnvY brings first-class `.env` file support to all JetBrains IDEs. Syntax highli
 Works with IntelliJ IDEA, WebStorm, PyCharm, CLion, RustRover, GoLand, PhpStorm, and Rider.
 <!-- Plugin description end -->
 
+<div align="left" style="padding-left: 16px;">
+  <a href="https://plugins.jetbrains.com/plugin/31217-envy/pricing">
+    <img src="src/main/resources/META-INF/freeTrialButton.svg" alt="Free Trial" height="32">
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://plugins.jetbrains.com/plugin/31217-envy/reviews">
+    <img src="src/main/resources/META-INF/reviewButton.svg" alt="Leave a review" height="32">
+  </a>
+</div>
+
 ## Features
 
 ### Syntax Highlighting

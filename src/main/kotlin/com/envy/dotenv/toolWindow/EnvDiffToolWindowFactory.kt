@@ -3,7 +3,6 @@ package com.envy.dotenv.toolWindow
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
-import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.JBColor
@@ -62,7 +61,9 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Dispo
         add(topBar, BorderLayout.NORTH)
 
         table.setDefaultEditor(Any::class.java, null)
-        table.autoResizeMode = JTable.AUTO_RESIZE_OFF
+        // NEXT_COLUMN: dragging a divider resizes only the two columns adjacent to it.
+        // All other columns stay exactly where they are. Table always fills the viewport.
+        table.autoResizeMode = JTable.AUTO_RESIZE_NEXT_COLUMN
         table.rowHeight = 24
 
         val renderer = object : DefaultTableCellRenderer() {
@@ -177,8 +178,6 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Dispo
         }
 
         tableModel.setDataVector(rowData, arrayOf("Key", leftName, rightName, "Status"))
-        table.columnModel.getColumn(1).headerValue = leftName
-        table.columnModel.getColumn(2).headerValue = rightName
         table.tableHeader?.repaint()
     }
 
