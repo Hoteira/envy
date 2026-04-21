@@ -1,5 +1,20 @@
 # Changelog
 
+
+## [2.3.2]
+### Dynamic Plugin Loading
+- Plugin can now be enabled, disabled, and updated without restarting the IDE
+### 1k Downloads Gift
+- Standard code completion has become a free feature to celebrate teh first 1k downloads!
+### Licensing
+- Final license checking integrating the default JetBrains template with async execution
+
+## [2.3.1]
+### UI & Behavior
+- **Independent Column Resizing:** Changed the `EnvDiffToolWindow` resize behavior so adjusting the width of one column no longer forcefully resizes the others.
+- **Optimistic UI Initialization:** The plugin now optimistically initializes Pro features (like `SecretLeakChecker`) instantly on startup. This completely prevents UI blocking and flickering while
+the asynchronous license validation completes in the background.
+
 ## [2.3.0]
 ### Performance & UX
 - Drastically reduced typing latency in large `.env` files by implementing LRU caching for Regex evaluations and `isSecret` checks.

@@ -1,11 +1,12 @@
 package com.envy.dotenv.licensing
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.ui.LicensingFacade
-import java.security.Signature
-import java.security.cert.*
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
+import java.security.Signature
+import java.security.cert.*
 import java.util.Base64
 
 object LicenseChecker {
@@ -15,131 +16,237 @@ object LicenseChecker {
 
     private const val KEY_PREFIX = "key:"
     private const val STAMP_PREFIX = "stamp:"
-    private const val EVAL_PREFIX = "eval:"
 
-    private val JETBRAINS_CERT = """
-        -----BEGIN CERTIFICATE-----
-        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
-        -----END CERTIFICATE-----
-    """.trimIndent()
+    private const val TIMESTAMP_VALIDITY_PERIOD_MS = 60 * 60 * 1000L // 1 hour
 
-    @Volatile private var cachedAvailable: Boolean = false
+    private val ROOT_CERTIFICATES = arrayOf(
+        // JetProfile CA
+        "-----BEGIN CERTIFICATE-----\n" +
+        "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\n" +
+        "-----END CERTIFICATE-----\n",
+        // License Servers CA
+        "-----BEGIN CERTIFICATE-----\n" +
+        "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\n" +
+        "7tlDFnvaRnQukqSG+VqNWg==\n" +
+        "-----END CERTIFICATE-----"
+    )
+
+    @Volatile private var cachedAvailable: Boolean = true
     @Volatile private var cacheExpiry: Long = 0L
     @Volatile private var isChecking: Boolean = false
+    @Volatile private var hasCheckedOnce: Boolean = false
 
     fun isPaidFeatureAvailable(): Boolean {
         if (System.getProperty("envy.dev.pro") == "true") return true
         val now = System.currentTimeMillis()
-        if (now < cacheExpiry) return cachedAvailable
-        
+
+        if (hasCheckedOnce && now < cacheExpiry) return cachedAvailable
+
         if (!isChecking) {
             isChecking = true
-            com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+            ApplicationManager.getApplication().executeOnPooledThread {
                 try {
                     val result = computeAvailability()
                     cachedAvailable = result
                     cacheExpiry = System.currentTimeMillis() + 30_000L
+                    hasCheckedOnce = true
                 } finally {
                     isChecking = false
                 }
             }
         }
-        
-        return cachedAvailable
+
+        return if (hasCheckedOnce) cachedAvailable else true
     }
 
     private fun computeAvailability(): Boolean {
-        var isValid = false
         try {
             val facade = LicensingFacade.getInstance() ?: return false
-            if (facade.isEvaluationLicense) isValid = true
-            val stamp = facade.getConfirmationStamp(PRODUCT_CODE)
-            if (stamp != null) {
-                when {
-                    stamp.startsWith(KEY_PREFIX) ->
-                        if (isKeyValid(stamp.substring(KEY_PREFIX.length))) isValid = true
-                    stamp.startsWith(STAMP_PREFIX) ->
-                        if (isLicenseServerStampValid(stamp.substring(STAMP_PREFIX.length))) isValid = true
-                    stamp.startsWith(EVAL_PREFIX) ->
-                        if (isEvaluationValid(stamp.substring(EVAL_PREFIX.length))) isValid = true
-                }
+            val stamp = facade.getConfirmationStamp(PRODUCT_CODE) ?: return false
+            return when {
+                stamp.startsWith(KEY_PREFIX) -> isKeyValid(stamp.substring(KEY_PREFIX.length))
+                stamp.startsWith(STAMP_PREFIX) -> isLicenseServerStampValid(stamp.substring(STAMP_PREFIX.length))
+                else -> false
             }
         } catch (e: Exception) {
             LOG.debug("License check failed", e)
         }
-        return isValid
-    }
-
-    private fun isKeyValid(key: String): Boolean {
-        // Offline key validation
-        try {
-            val parts = key.split("-")
-            if (parts.size < 4) return false
-
-            val licensePartBase64 = parts[1]
-            val signatureBase64 = parts[2]
-            val certBase64 = parts[3]
-
-            val cert = createCertificate(certBase64)
-            val sig = Signature.getInstance("SHA1withRSA")
-            sig.initVerify(cert)
-            sig.update(Base64.getMimeDecoder().decode(licensePartBase64.toByteArray(StandardCharsets.UTF_8)))
-
-            return sig.verify(Base64.getMimeDecoder().decode(signatureBase64.toByteArray(StandardCharsets.UTF_8)))
-        } catch (e: Exception) {
-            return false
-        }
-    }
-
-    private fun isLicenseServerStampValid(stamp: String): Boolean {
-        if (stamp.length < 32) return false
-        return try {
-            Base64.getMimeDecoder().decode(stamp)
-            true
-        } catch (e: IllegalArgumentException) {
-            false
-        }
-    }
-
-    private fun isEvaluationValid(evalInfo: String): Boolean {
-        if (evalInfo.isEmpty()) return false
-        // Eval stamp encodes expiry as milliseconds since epoch
-        val expiry = evalInfo.trim().toLongOrNull()
-        if (expiry != null) return System.currentTimeMillis() < expiry
-        // Unknown format — do not grant access
         return false
     }
 
-    private fun createCertificate(certBase64: String): X509Certificate {
-        val certFactory = CertificateFactory.getInstance("X.509")
-        val certBytes = Base64.getMimeDecoder().decode(certBase64.toByteArray(StandardCharsets.UTF_8))
-        return certFactory.generateCertificate(ByteArrayInputStream(certBytes)) as X509Certificate
+    private fun isKeyValid(key: String): Boolean {
+        val licenseParts = key.split("-")
+        if (licenseParts.size != 4) return false
+
+        val licenseId = licenseParts[0]
+        val licensePartBase64 = licenseParts[1]
+        val signatureBase64 = licenseParts[2]
+        val certBase64 = licenseParts[3]
+
+        try {
+            val base64 = Base64.getMimeDecoder()
+            val certBytes = base64.decode(certBase64.toByteArray(StandardCharsets.UTF_8))
+
+            // checkValidityAtCurrentDate = false: perpetual fallback licenses for older IDE versions
+            // should still be accepted — only the signing chain matters
+            val cert = createCertificate(certBytes, emptySet(), checkValidityAtCurrentDate = false)
+
+            val sig = Signature.getInstance("SHA1withRSA")
+            sig.initVerify(cert)
+            val licenseBytes = base64.decode(licensePartBase64.toByteArray(StandardCharsets.UTF_8))
+            sig.update(licenseBytes)
+            if (!sig.verify(base64.decode(signatureBase64.toByteArray(StandardCharsets.UTF_8)))) {
+                return false
+            }
+
+            // Verify the licenseId in the signed payload matches the one in the key
+            val licenseData = String(licenseBytes, StandardCharsets.UTF_8)
+            return licenseData.contains("\"licenseId\":\"$licenseId\"")
+        } catch (e: Throwable) {
+            LOG.debug("Key validation failed", e)
+        }
+        return false
+    }
+
+    private fun isLicenseServerStampValid(serverStamp: String): Boolean {
+        try {
+            val parts = serverStamp.split(":")
+            if (parts.size < 6) return false
+
+            val base64 = Base64.getMimeDecoder()
+
+            val expectedMachineId = parts[0]
+            val timeStamp = parts[1].toLong()
+            val machineId = parts[2]
+            val signatureType = parts[3]
+            val signatureBytes = base64.decode(parts[4].toByteArray(StandardCharsets.UTF_8))
+            val certBytes = base64.decode(parts[5].toByteArray(StandardCharsets.UTF_8))
+
+            val intermediateCerts = mutableSetOf<ByteArray>()
+            for (idx in 6 until parts.size) {
+                intermediateCerts.add(base64.decode(parts[idx].toByteArray(StandardCharsets.UTF_8)))
+            }
+
+            // checkValidityAtCurrentDate = true: expired certs from a license server cannot be trusted
+            val cert = createCertificate(certBytes, intermediateCerts, checkValidityAtCurrentDate = true)
+
+            val sig = Signature.getInstance(signatureType)
+            sig.initVerify(cert)
+            sig.update("$timeStamp:$machineId".toByteArray(StandardCharsets.UTF_8))
+
+            if (sig.verify(signatureBytes)) {
+                return expectedMachineId == machineId &&
+                    Math.abs(System.currentTimeMillis() - timeStamp) < TIMESTAMP_VALIDITY_PERIOD_MS
+            }
+        } catch (e: Throwable) {
+            LOG.debug("License server stamp validation failed", e)
+        }
+        return false
+    }
+
+    @Throws(Exception::class)
+    private fun createCertificate(
+        certBytes: ByteArray,
+        intermediateCertsBytes: Set<ByteArray>,
+        checkValidityAtCurrentDate: Boolean
+    ): X509Certificate {
+        val x509factory = CertificateFactory.getInstance("X.509")
+        val cert = x509factory.generateCertificate(ByteArrayInputStream(certBytes)) as X509Certificate
+
+        val allCerts = mutableSetOf<Certificate>(cert)
+        for (bytes in intermediateCertsBytes) {
+            allCerts.add(x509factory.generateCertificate(ByteArrayInputStream(bytes)))
+        }
+
+        try {
+            val selector = X509CertSelector()
+            selector.certificate = cert
+
+            val trustAnchors = mutableSetOf<TrustAnchor>()
+            for (rc in ROOT_CERTIFICATES) {
+                trustAnchors.add(
+                    TrustAnchor(
+                        x509factory.generateCertificate(
+                            ByteArrayInputStream(rc.toByteArray(StandardCharsets.UTF_8))
+                        ) as X509Certificate,
+                        null
+                    )
+                )
+            }
+
+            val pkixParams = PKIXBuilderParameters(trustAnchors, selector)
+            pkixParams.isRevocationEnabled = false
+            if (!checkValidityAtCurrentDate) {
+                // Check validity at the start of the cert's validity period so we don't depend
+                // on the actual moment the check is performed
+                pkixParams.date = cert.notBefore
+            }
+            pkixParams.addCertStore(
+                CertStore.getInstance("Collection", CollectionCertStoreParameters(allCerts))
+            )
+
+            val path = CertPathBuilder.getInstance("PKIX").build(pkixParams).certPath
+            if (path != null) {
+                CertPathValidator.getInstance("PKIX").validate(path, pkixParams)
+                return cert
+            }
+        } catch (e: Exception) {
+            LOG.debug("Certificate chain validation failed", e)
+        }
+        throw Exception("Certificate used to sign the license is not signed by JetBrains root certificate")
     }
 }
