@@ -39,9 +39,7 @@ class DotEnvSyntaxHighlighter : SyntaxHighlighterBase() {
 }
 
 class DotEnvSyntaxHighlighterFactory : SyntaxHighlighterFactory() {
-    private val highlighter by lazy { DotEnvSyntaxHighlighter() }
-
     override fun getSyntaxHighlighter(project: Project?, virtualFile: VirtualFile?): SyntaxHighlighter {
-        return highlighter
+        return DotEnvSyntaxHighlighter()
     }
 }

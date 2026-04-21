@@ -1,7 +1,9 @@
 package com.envy.dotenv.toolWindow
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.JBColor
@@ -20,11 +22,12 @@ class EnvDiffToolWindowFactory : ToolWindowFactory {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = EnvDiffPanel(project)
         val content = ContentFactory.getInstance().createContent(panel, "Env Diff", false)
+        content.setDisposer(panel)
         toolWindow.contentManager.addContent(content)
     }
 }
 
-class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
+class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Disposable {
 
     private val service = project.getService(EnvFileService::class.java)
     private val leftCombo = JComboBox<String>()
@@ -34,6 +37,7 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
     private var envFiles = mapOf<String, Map<String, String>>()
     private var loading = false
     private var pendingLoad: java.util.concurrent.Future<*>? = null
+    @Volatile private var disposed = false
 
     private val rowStatuses = mutableListOf<RowStatus>()
 
@@ -58,7 +62,7 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
         add(topBar, BorderLayout.NORTH)
 
         table.setDefaultEditor(Any::class.java, null)
-        table.autoResizeMode = JTable.AUTO_RESIZE_ALL_COLUMNS
+        table.autoResizeMode = JTable.AUTO_RESIZE_OFF
         table.rowHeight = 24
 
         val renderer = object : DefaultTableCellRenderer() {
@@ -112,7 +116,7 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
         })
         .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState()) { result ->
-            if (project.isDisposed || !isDisplayable) return@finishOnUiThread
+            if (disposed || project.isDisposed || !isDisplayable) return@finishOnUiThread
             envFiles = result
             leftCombo.removeAllItems()
             rightCombo.removeAllItems()
@@ -178,4 +182,11 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()) {
         table.tableHeader?.repaint()
     }
 
+    override fun dispose() {
+        disposed = true
+        pendingLoad?.cancel(true)
+        pendingLoad = null
+        envFiles = emptyMap()
+        rowStatuses.clear()
+    }
 }

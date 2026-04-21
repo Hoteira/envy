@@ -5,7 +5,7 @@
 
 **Smart `.env` file manager for JetBrains IDEs**
 
-[![JetBrains](https://img.shields.io/badge/JetBrains-Marketplace-000000.svg?style=flat-square&logo=jetbrains)](https://plugins.jetbrains.com/)
+[![JetBrains](https://img.shields.io/badge/JetBrains-Marketplace-000000.svg?style=flat-square&logo=jetbrains)](https://plugins.jetbrains.com/plugin/31217-envy/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF.svg?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
 
@@ -21,21 +21,21 @@ EnvY brings first-class `.env` file support to all JetBrains IDEs. Syntax highli
 ## Free vs Pro
 
 | Feature | Free | Pro |
-|---|:---:|:---:|
-| Syntax highlighting for `.env` files | ✓ | ✓ |
-| Duplicate key detection + quick-fix | ✓ | ✓ |
-| Cross-environment diff tool window | ✓ | ✓ |
-| Recursive `.env` file discovery | ✓ | ✓ |
-| `.envrc` (direnv) file support | ✓ | ✓ |
-| Secret values hidden in presentation mode | ✓ | ✓ |
-| Quick-fix: reveal hidden key / reveal all | ✓ | ✓ |
-| Secret leak detection | | ✓ |
-| Gitignore verification for secrets | | ✓ |
-| Quick-fix: add to `.gitignore` | | ✓ |
-| Quick-fix: replace secret with placeholder | | ✓ |
-| Sensitive key name detection | | ✓ |
-| Env var autocomplete in code | | ✓ |
-| Inline ghost completion (Tab to accept) | | ✓ |
+|---|:----:|:---:|
+| Syntax highlighting for `.env` files |  ✓   | ✓ |
+| Duplicate key detection + quick-fix |  ✓   | ✓ |
+| Cross-environment diff tool window |  ✓   | ✓ |
+| Recursive `.env` file discovery |  ✓   | ✓ |
+| `.envrc` (direnv) file support |  ✓   | ✓ |
+| Secret values hidden in presentation mode |  ✓   | ✓ |
+| Quick-fix: reveal hidden key / reveal all |  ✓   | ✓ |
+| Env var autocomplete in code |  ✓   | ✓ |
+| Secret leak detection |      | ✓ |
+| Gitignore verification for secrets |      | ✓ |
+| Quick-fix: add to `.gitignore` |      | ✓ |
+| Quick-fix: replace secret with placeholder |      | ✓ |
+| Sensitive key name detection |      | ✓ |
+| Inline ghost completion (Tab to accept) |      | ✓ |
 
 Works with IntelliJ IDEA, WebStorm, PyCharm, CLion, RustRover, GoLand, PhpStorm, and Rider.
 <!-- Plugin description end -->
@@ -72,9 +72,9 @@ Secret values automatically fold to `***` when presentation mode is enabled. No 
 
 Full support for `.envrc` files used by direnv. Environment variables defined with `export` are parsed and included automatically.
 
-### Env Var Autocomplete (Pro)
+### Env Var Autocomplete 
 
-Context-aware autocomplete for environment variable access patterns across 10+ languages — JavaScript, Python, Rust, PHP, Ruby, Go, Java, Kotlin, C#, and more. Includes **zero-latency inline ghost completion** (Tab to accept) powered by an asynchronous, garbage-collection-optimized caching engine that updates the exact millisecond you type.
+Context-aware autocomplete for environment variable access patterns across 10+ languages — JavaScript, Python, Rust, PHP, Ruby, Go, Java, Kotlin, C#, and more. Includes **low-latency inline ghost completion** (Tab to accept) powered by an asynchronous caching engine.
 
 ## Installation
 

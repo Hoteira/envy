@@ -1,5 +1,6 @@
 package com.envy.dotenv.services
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -12,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap
  * These remain expanded even when presentation mode is toggled back on.
  */
 @Service(Service.Level.PROJECT)
-class PresentationModeState(private val project: Project) {
+class PresentationModeState(private val project: Project) : Disposable {
 
     // file path -> list of range markers
     private val revealedMarkers = ConcurrentHashMap<String, MutableList<RangeMarker>>()
@@ -36,6 +37,13 @@ class PresentationModeState(private val project: Project) {
     }
 
     fun clearRevealed(file: VirtualFile) {
-        revealedMarkers.remove(file.path)
+        revealedMarkers.remove(file.path)?.forEach { it.dispose() }
+    }
+
+    override fun dispose() {
+        for (markers in revealedMarkers.values) {
+            markers.forEach { it.dispose() }
+        }
+        revealedMarkers.clear()
     }
 }

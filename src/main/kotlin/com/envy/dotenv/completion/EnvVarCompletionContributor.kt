@@ -62,7 +62,6 @@ class EnvVarCompletionProvider : CompletionProvider<CompletionParameters>() {
         result: CompletionResultSet
     ) {
         if (parameters.originalFile.fileType is DotEnvFileType) return
-        if (!LicenseChecker.isPaidFeatureAvailable()) return
 
         val project = parameters.position.project
         val editor = parameters.editor
