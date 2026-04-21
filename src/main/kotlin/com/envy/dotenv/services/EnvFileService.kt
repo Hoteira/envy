@@ -34,7 +34,7 @@ class EnvFileService(private val project: Project) : Disposable {
     @Volatile private var allKeyValuesCache: Map<String, String>? = null
     @Volatile private var disposed = false
 
-    private val connection = project.messageBus.connect(this)
+    private val connection = ApplicationManager.getApplication().messageBus.connect(this)
 
     init {
         connection.subscribe(VirtualFileManager.VFS_CHANGES, object : BulkFileListener {

@@ -65,8 +65,8 @@ class SecretLeakInspection : LocalInspectionTool() {
             "replace_me", "placeholder", "null", "none", "undefined"
         )
 
-        private val patternCache = com.intellij.util.containers.ContainerUtil.createConcurrentSoftValueMap<String, String>()
-        private val isSecretCache = com.intellij.util.containers.ContainerUtil.createConcurrentSoftValueMap<String, Boolean>()
+        private val patternCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+        private val isSecretCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
         fun getSecretPatternName(value: String): String? {
             if (value.isEmpty()) return null

@@ -15,6 +15,7 @@ import java.awt.Component
 import javax.swing.*
 import javax.swing.table.DefaultTableCellRenderer
 import javax.swing.table.DefaultTableModel
+import com.intellij.openapi.ui.ComboBox
 
 class EnvDiffToolWindowFactory : ToolWindowFactory {
 
@@ -29,8 +30,8 @@ class EnvDiffToolWindowFactory : ToolWindowFactory {
 class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Disposable {
 
     private val service = project.getService(EnvFileService::class.java)
-    private val leftCombo = JComboBox<String>()
-    private val rightCombo = JComboBox<String>()
+    private val leftCombo = ComboBox<String>()
+    private val rightCombo = ComboBox<String>()
     private val tableModel = DefaultTableModel(arrayOf("Key", "Left", "Right", "Status"), 0)
     private val table = JBTable(tableModel)
     private var envFiles = mapOf<String, Map<String, String>>()
@@ -116,6 +117,7 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Dispo
                 relativePath to service.parseEnvFile(file)
             }
         })
+            .expireWith(this)
         .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState()) { result ->
             if (disposed || project.isDisposed || !isDisplayable) return@finishOnUiThread
             envFiles = result
