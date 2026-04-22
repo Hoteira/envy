@@ -46,31 +46,32 @@ class EnvVarInlineCompletionProvider : InlineCompletionProvider {
         val offset = request.endOffset
         val project = request.editor.project ?: return InlineCompletionSuggestion.Empty
 
-        val lineNumber = document.getLineNumber(offset)
-        val lineStart = document.getLineStartOffset(lineNumber)
-        val textBeforeCursor = document.getText(TextRange(lineStart, offset))
+        val (prefix, allKeysSorted) = readAction {
+            val lineNumber = document.getLineNumber(offset)
+            val lineStart = document.getLineStartOffset(lineNumber)
+            val textBeforeCursor = document.getText(TextRange(lineStart, offset))
 
-        // Early exit: skip regex matching if no relevant keyword in the line
-        if (quickCheckKeywords.none { textBeforeCursor.contains(it) }) {
-            return InlineCompletionSuggestion.Empty
-        }
-
-        var prefix = ""
-        var matched = false
-
-        for (pattern in envPatterns) {
-            val match = pattern.find(textBeforeCursor)
-            if (match != null) {
-                prefix = match.groupValues[1]
-                matched = true
-                break
+            if (quickCheckKeywords.none { textBeforeCursor.contains(it) }) {
+                return@readAction null
             }
-        }
 
-        if (!matched) return InlineCompletionSuggestion.Empty
+            var matchedPrefix = ""
+            var matched = false
 
-        val service = project.getService(EnvFileService::class.java)
-        val allKeysSorted = readAction { service.getAllKeysSorted() }
+            for (pattern in envPatterns) {
+                val match = pattern.find(textBeforeCursor)
+                if (match != null) {
+                    matchedPrefix = match.groupValues[1]
+                    matched = true
+                    break
+                }
+            }
+
+            if (!matched) return@readAction null
+
+            val service = project.getService(EnvFileService::class.java)
+            matchedPrefix to service.getAllKeysSorted()
+        } ?: return InlineCompletionSuggestion.Empty
 
         val candidates = allKeysSorted
             .filter { it.startsWith(prefix, ignoreCase = true) && it != prefix }

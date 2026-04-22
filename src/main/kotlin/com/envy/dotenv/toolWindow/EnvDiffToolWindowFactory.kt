@@ -39,14 +39,16 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Dispo
     private var pendingLoad: java.util.concurrent.Future<*>? = null
     @Volatile private var disposed = false
 
-    private val rowStatuses = mutableListOf<RowStatus>()
-
     private val differBg = JBColor(Color(255, 255, 180), Color(80, 80, 0))
     private val differFg = JBColor(Color(60, 60, 0), Color.WHITE)
     private val missingBg = JBColor(Color(255, 220, 220), Color(80, 0, 0))
     private val missingFg = JBColor(Color(100, 0, 0), Color.WHITE)
 
-    enum class RowStatus { MATCH, DIFFER, MISSING_LEFT, MISSING_RIGHT }
+    private companion object {
+        const val STATUS_OK = "OK"
+        const val STATUS_DIFFERS = "DIFFERS"
+        const val STATUS_MISSING = "MISSING"
+    }
 
     init {
         val topBar = JPanel()
@@ -73,19 +75,22 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Dispo
                 hasFocus: Boolean, row: Int, column: Int
             ): Component {
                 val comp = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
-                if (!isSelected && row < rowStatuses.size) {
-                    when (rowStatuses[row]) {
-                        RowStatus.MATCH -> {
-                            comp.background = table.background
-                            comp.foreground = table.foreground
-                        }
-                        RowStatus.DIFFER -> {
+                if (!isSelected) {
+                    val statusCol = table.columnCount - 1
+                    val modelRow = table.convertRowIndexToModel(row)
+                    val status = table.model.getValueAt(modelRow, statusCol) as? String
+                    when (status) {
+                        STATUS_DIFFERS -> {
                             comp.background = differBg
                             comp.foreground = differFg
                         }
-                        RowStatus.MISSING_LEFT, RowStatus.MISSING_RIGHT -> {
+                        STATUS_MISSING -> {
                             comp.background = missingBg
                             comp.foreground = missingFg
+                        }
+                        else -> {
+                            comp.background = table.background
+                            comp.foreground = table.foreground
                         }
                     }
                 }
@@ -147,7 +152,6 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Dispo
         val rightMap = envFiles[rightName] ?: return
 
         tableModel.rowCount = 0
-        rowStatuses.clear()
 
         val allKeys = (leftMap.keys + rightMap.keys).toSortedSet()
         val rowData = Array(allKeys.size) { emptyArray<Any>() }
@@ -157,17 +161,10 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Dispo
             val leftVal = leftMap[key]
             val rightVal = rightMap[key]
 
-            val status = when {
-                leftVal == null -> RowStatus.MISSING_LEFT
-                rightVal == null -> RowStatus.MISSING_RIGHT
-                leftVal == rightVal -> RowStatus.MATCH
-                else -> RowStatus.DIFFER
-            }
-
-            val statusText = when (status) {
-                RowStatus.MATCH -> "OK"
-                RowStatus.DIFFER -> "DIFFERS"
-                RowStatus.MISSING_LEFT, RowStatus.MISSING_RIGHT -> "MISSING"
+            val statusText = when {
+                leftVal == null || rightVal == null -> STATUS_MISSING
+                leftVal == rightVal -> STATUS_OK
+                else -> STATUS_DIFFERS
             }
 
             rowData[rowIndex++] = arrayOf(
@@ -176,7 +173,6 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Dispo
                 rightVal ?: "-",
                 statusText
             )
-            rowStatuses.add(status)
         }
 
         tableModel.setDataVector(rowData, arrayOf("Key", leftName, rightName, "Status"))
@@ -188,6 +184,5 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Dispo
         pendingLoad?.cancel(true)
         pendingLoad = null
         envFiles = emptyMap()
-        rowStatuses.clear()
     }
 }

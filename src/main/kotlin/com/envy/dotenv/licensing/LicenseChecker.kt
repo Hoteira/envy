@@ -102,9 +102,11 @@ object LicenseChecker {
             ApplicationManager.getApplication().executeOnPooledThread {
                 try {
                     val result = computeAvailability()
-                    cachedAvailable = result
-                    cacheExpiry = System.currentTimeMillis() + 30_000L
-                    hasCheckedOnce = true
+                    if (result != null) {
+                        cachedAvailable = result
+                        cacheExpiry = System.currentTimeMillis() + 30_000L
+                        hasCheckedOnce = true
+                    }
                 } finally {
                     isChecking = false
                 }
@@ -114,9 +116,9 @@ object LicenseChecker {
         return if (hasCheckedOnce) cachedAvailable else true
     }
 
-    private fun computeAvailability(): Boolean {
+    private fun computeAvailability(): Boolean? {
         try {
-            val facade = LicensingFacade.getInstance() ?: return false
+            val facade = LicensingFacade.getInstance() ?: return null // not ready yet
             val stamp = facade.getConfirmationStamp(PRODUCT_CODE) ?: return false
             return when {
                 stamp.startsWith(KEY_PREFIX) -> isKeyValid(stamp.substring(KEY_PREFIX.length))
