@@ -20,6 +20,11 @@ import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.Computable
+import com.intellij.openapi.util.SimpleModificationTracker
+import com.intellij.psi.util.CachedValueProvider
+import com.intellij.psi.util.CachedValuesManager
+import com.intellij.psi.util.CachedValue
+import com.intellij.util.Alarm
 import com.envy.dotenv.language.DotEnvFileType
 import java.util.concurrent.ConcurrentHashMap
 
@@ -27,14 +32,53 @@ import java.util.concurrent.ConcurrentHashMap
 class EnvFileService(private val project: Project) : Disposable {
 
     private val fileKeyValues = ConcurrentHashMap<String, Map<String, String>>()
+    private val modificationTracker = SimpleModificationTracker()
+    private val pendingFiles = ConcurrentHashMap.newKeySet<VirtualFile>()
+    private val debounceAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
 
-    @Volatile private var fileListCache: List<VirtualFile>? = null
-    @Volatile private var allKeysCache: Set<String>? = null
-    @Volatile private var allKeysSortedCache: List<String>? = null
-    @Volatile private var allKeyValuesCache: Map<String, String>? = null
     @Volatile private var disposed = false
 
     private val connection = ApplicationManager.getApplication().messageBus.connect(this)
+
+    private val fileListCachedValue: CachedValue<List<VirtualFile>> =
+        CachedValuesManager.getManager(project).createCachedValue {
+            val files = ApplicationManager.getApplication().runReadAction(Computable {
+                if (project.isDisposed) return@Computable emptyList<VirtualFile>()
+                FileTypeIndex.getFiles(DotEnvFileType, GlobalSearchScope.projectScope(project)).filter { file ->
+                    val p = file.path
+                    !p.contains("/.git/") && !p.contains("/node_modules/")
+                }.sortedBy { it.path }
+            })
+            CachedValueProvider.Result.create(files, modificationTracker)
+        }
+
+    private val allKeyValuesCachedValue: CachedValue<Map<String, String>> =
+        CachedValuesManager.getManager(project).createCachedValue {
+            val mergedValues = mutableMapOf<String, String>()
+            for (file in fileListCachedValue.value) {
+                val map = fileKeyValues[file.path] ?: continue
+                for ((key, value) in map) {
+                    mergedValues.putIfAbsent(key, value)
+                }
+            }
+            CachedValueProvider.Result.create<Map<String, String>>(mergedValues, modificationTracker)
+        }
+
+    private val allKeysCachedValue: CachedValue<Set<String>> =
+        CachedValuesManager.getManager(project).createCachedValue {
+            CachedValueProvider.Result.create<Set<String>>(
+                allKeyValuesCachedValue.value.keys.toSet(),
+                modificationTracker
+            )
+        }
+
+    private val allKeysSortedCachedValue: CachedValue<List<String>> =
+        CachedValuesManager.getManager(project).createCachedValue {
+            CachedValueProvider.Result.create(
+                allKeysCachedValue.value.sortedWith(compareBy({ it.length }, { it })),
+                modificationTracker
+            )
+        }
 
     init {
         connection.subscribe(VirtualFileManager.VFS_CHANGES, object : BulkFileListener {
@@ -63,15 +107,13 @@ class EnvFileService(private val project: Project) : Disposable {
                 if (needsFileListUpdate) {
                     ApplicationManager.getApplication().executeOnPooledThread {
                         if (disposed) return@executeOnPooledThread
-                        val files = ApplicationManager.getApplication().runReadAction(Computable {
-                            if (project.isDisposed) return@Computable emptyList()
-                            FileTypeIndex.getFiles(DotEnvFileType, GlobalSearchScope.projectScope(project)).filter { file ->
-                                val p = file.path
-                                !p.contains("/.git/") && !p.contains("/node_modules/")
-                            }.sortedBy { it.path }
-                        })
-                        fileListCache = files
-                        rebuildGlobalCaches()
+                        modificationTracker.incModificationCount()
+                        for (file in fileListCachedValue.value) {
+                            if (!fileKeyValues.containsKey(file.path)) {
+                                parseAndStore(file)
+                            }
+                        }
+                        modificationTracker.incModificationCount()
                     }
                 } else if (updatedFiles.isNotEmpty()) {
                     ApplicationManager.getApplication().executeOnPooledThread {
@@ -79,7 +121,7 @@ class EnvFileService(private val project: Project) : Disposable {
                         for (file in updatedFiles) {
                             parseAndStore(file)
                         }
-                        rebuildGlobalCaches()
+                        modificationTracker.incModificationCount()
                     }
                 }
             }
@@ -91,11 +133,9 @@ class EnvFileService(private val project: Project) : Disposable {
                 val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
                 val path = file.path
                 if (path.endsWith(".env") || path.contains("/.env.")) {
-                    ApplicationManager.getApplication().executeOnPooledThread {
-                        if (disposed) return@executeOnPooledThread
-                        parseAndStore(file, event.document)
-                        rebuildGlobalCaches()
-                    }
+                    pendingFiles.add(file)
+                    debounceAlarm.cancelAllRequests()
+                    debounceAlarm.addRequest({ processPendingFiles() }, 300)
                 }
             }
         }, this)
@@ -103,19 +143,21 @@ class EnvFileService(private val project: Project) : Disposable {
         // Initial build
         ApplicationManager.getApplication().executeOnPooledThread {
             if (disposed) return@executeOnPooledThread
-            val files = ApplicationManager.getApplication().runReadAction(Computable {
-                if (project.isDisposed) return@Computable emptyList()
-                FileTypeIndex.getFiles(DotEnvFileType, GlobalSearchScope.projectScope(project)).filter { file ->
-                    val p = file.path
-                    !p.contains("/.git/") && !p.contains("/node_modules/")
-                }.sortedBy { it.path }
-            })
-            fileListCache = files
-            for (file in files) {
+            for (file in fileListCachedValue.value) {
                 parseAndStore(file)
             }
-            rebuildGlobalCaches()
+            modificationTracker.incModificationCount()
         }
+    }
+
+    private fun processPendingFiles() {
+        if (disposed) return
+        val files = pendingFiles.toList()
+        pendingFiles.clear()
+        for (file in files) {
+            parseAndStore(file)
+        }
+        modificationTracker.incModificationCount()
     }
 
     private fun parseAndStore(file: VirtualFile, document: com.intellij.openapi.editor.Document? = null) {
@@ -137,28 +179,7 @@ class EnvFileService(private val project: Project) : Disposable {
         fileKeyValues[file.path] = map
     }
 
-    private fun rebuildGlobalCaches() {
-        if (disposed) return
-        val mergedValues = mutableMapOf<String, String>()
-        val allKeys = mutableSetOf<String>()
-        val files = fileListCache ?: emptyList()
-
-        for (file in files) {
-            val map = fileKeyValues[file.path] ?: continue
-            for ((key, value) in map) {
-                mergedValues.putIfAbsent(key, value)
-                allKeys.add(key)
-            }
-        }
-
-        allKeyValuesCache = mergedValues
-        allKeysCache = allKeys
-        allKeysSortedCache = allKeys.sortedWith(compareBy({ it.length }, { it }))
-    }
-
-    fun findEnvFiles(): List<VirtualFile> {
-        return fileListCache ?: emptyList()
-    }
+    fun findEnvFiles(): List<VirtualFile> = fileListCachedValue.value
 
     fun parseEnvFile(file: VirtualFile): Map<String, String> {
         val existing = fileKeyValues[file.path]
@@ -177,24 +198,15 @@ class EnvFileService(private val project: Project) : Disposable {
         return map
     }
 
-    fun getAllKeys(): Set<String> {
-        return allKeysCache ?: emptySet()
-    }
+    fun getAllKeys(): Set<String> = allKeysCachedValue.value
 
-    fun getAllKeysSorted(): List<String> {
-        return allKeysSortedCache ?: emptyList()
-    }
+    fun getAllKeysSorted(): List<String> = allKeysSortedCachedValue.value
 
-    fun getAllKeyValues(): Map<String, String> {
-        return allKeyValuesCache ?: emptyMap()
-    }
+    fun getAllKeyValues(): Map<String, String> = allKeyValuesCachedValue.value
 
     override fun dispose() {
         disposed = true
         fileKeyValues.clear()
-        fileListCache = null
-        allKeysCache = null
-        allKeysSortedCache = null
-        allKeyValuesCache = null
+        pendingFiles.clear()
     }
 }

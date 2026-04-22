@@ -65,30 +65,14 @@ class SecretLeakInspection : LocalInspectionTool() {
             "replace_me", "placeholder", "null", "none", "undefined"
         )
 
-        private val patternCache = java.util.concurrent.ConcurrentHashMap<String, String>()
-        private val isSecretCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
-
         fun getSecretPatternName(value: String): String? {
             if (value.isEmpty()) return null
-            
-            val cached = patternCache[value]
-            if (cached != null) return if (cached.isEmpty()) null else cached
-            
-            val found = secretPatterns.find { it.regex.containsMatchIn(value) }?.name ?: ""
-            patternCache[value] = found
-            return if (found.isEmpty()) null else found
+            return secretPatterns.find { it.regex.containsMatchIn(value) }?.name
         }
 
         fun isSecret(key: String, value: String): Boolean {
             if (value.isEmpty()) return false
-            
-            val cacheKey = "$key:$value"
-            val cached = isSecretCache[cacheKey]
-            if (cached != null) return cached
-
-            val result = computeIsSecret(key, value)
-            isSecretCache[cacheKey] = result
-            return result
+            return computeIsSecret(key, value)
         }
 
         private fun computeIsSecret(key: String, value: String): Boolean {
