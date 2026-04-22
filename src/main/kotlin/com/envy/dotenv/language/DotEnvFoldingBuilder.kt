@@ -34,7 +34,7 @@ class DotEnvFoldingBuilder : FoldingBuilderEx() {
                 DotEnvTypes.VALUE, DotEnvTypes.QUOTED_VALUE -> {
                     val key = currentKey
                     if (key != null) {
-                        val value = node.text.removeSurrounding("\"").removeSurrounding("'")
+                        val value = node.text.removeSurrounding("\"").removeSurrounding("'").removeSurrounding("`")
                         if (value.isNotEmpty() && SecretLeakInspection.isSecret(key, value)) {
                             descriptors.add(FoldingDescriptor(node, node.textRange))
                         }

@@ -3,7 +3,6 @@ package com.envy.dotenv.inspections
 import com.intellij.codeInspection.LocalInspectionTool
 import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.codeInspection.ProblemHighlightType
-import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElementVisitor
 import com.intellij.psi.PsiFile
 import com.envy.dotenv.language.psi.DotEnvFile
@@ -22,12 +21,10 @@ class DuplicateKeyInspection : LocalInspectionTool() {
                 if (file !is DotEnvFile) return
 
                 val entries = PsiEnvExtractor.extractEntries(file)
+                val document = com.intellij.psi.PsiDocumentManager.getInstance(holder.project).getDocument(file) ?: return
                 val seen = mutableMapOf<String, Int>() // key -> first occurrence (1-indexed line)
 
                 for (entry in entries) {
-                    val document = holder.manager.project.let {
-                        com.intellij.psi.PsiDocumentManager.getInstance(it).getDocument(file)
-                    } ?: return
                     val lineNum = document.getLineNumber(entry.keyNode.startOffset) + 1
 
                     if (seen.containsKey(entry.key)) {
@@ -35,7 +32,7 @@ class DuplicateKeyInspection : LocalInspectionTool() {
                             entry.keyNode.psi,
                             "Duplicate key '${entry.key}' - first defined on line ${seen[entry.key]}",
                             ProblemHighlightType.WARNING,
-                            RemoveDuplicateFix(entry.key, lineNum - 1)
+                            RemoveDuplicateFix(entry.key)
                         )
                     } else {
                         seen[entry.key] = lineNum
@@ -46,16 +43,16 @@ class DuplicateKeyInspection : LocalInspectionTool() {
     }
 }
 
-class RemoveDuplicateFix(private val key: String, private val lineIndex: Int) : com.intellij.codeInspection.LocalQuickFix {
+class RemoveDuplicateFix(private val key: String) : com.intellij.codeInspection.LocalQuickFix {
     override fun getName(): String = "Remove duplicate '$key'"
     override fun getFamilyName(): String = "DotEnv"
 
     override fun applyFix(project: com.intellij.openapi.project.Project, descriptor: com.intellij.codeInspection.ProblemDescriptor) {
-        val file = descriptor.psiElement?.containingFile ?: return
+        val element = descriptor.psiElement ?: return
+        val file = element.containingFile ?: return
         val document = com.intellij.psi.PsiDocumentManager.getInstance(project).getDocument(file) ?: return
 
-        if (lineIndex < 0 || lineIndex >= document.lineCount) return
-
+        val lineIndex = document.getLineNumber(element.textOffset)
         val lineStart = document.getLineStartOffset(lineIndex)
         val lineEnd = document.getLineEndOffset(lineIndex)
 

@@ -2,4 +2,4 @@
 
 
 
-const apikey = process.env.
+const apikey = process.env.RAN
