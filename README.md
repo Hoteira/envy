@@ -92,15 +92,46 @@ Context-aware autocomplete for environment variable access patterns across 10+ l
 
 `Settings` → `Plugins` → `Marketplace` → Search for **"EnvY"** → `Install`
 
-## Roadmap
+---
 
-- [x] Secret leak detection (API keys, tokens, passwords)
-- [x] Env var autocomplete in code
-- [x] Recursive `.env` file discovery in subdirectories
-- [x] `.envrc` (direnv) file support
-- [x] Presentation mode secret folding
-- [ ] Env dashboard (all vars across all files)
+## Usage Guide
+
+EnvY works out of the box with zero configuration required, but here is how you can get the most out of its features:
+
+### Cross-Environment Diff Tool
+1. Look for the **"Env Diff"** tool window tab at the bottom - left of your IDE.
+2. Click to open it, and use the dropdowns to select any two `.env` files in your project (e.g., `.env.development` and `.env.production`).
+3. The panel will instantly populate with missing keys and value mismatches.
+
+### Quick-Fixes (Secret Leaks & Duplicates)
+When EnvY detects a **duplicate key** or an **exposed secret** <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">, it will highlight the line.
+* Place your cursor on the highlighted text.
+* Press `Alt+Enter` (Windows/Linux) or `⌥+Enter` (macOS) to open the context menu.
+* Select the desired action (e.g., **"Add to .gitignore"** or **"Replace secret with placeholder"**).
+
+### Ghost Text Autocomplete <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
+Start typing your environment variable accessor (like `process.env.` in JavaScript or `os.getenv()` in Python).
+EnvY will automatically suggest variables from your `.env` files using inline gray text.
+* Press `Tab` to accept the suggestion.
+
+### Presentation Mode
+EnvY automatically folds sensitive values (turning them into `***`) the moment you enter IntelliJ's native Presentation Mode (`View` → `Appearance` → `Enter Presentation Mode`).
+* To temporarily reveal a specific folded secret, **left-click** the on the `***`, or press `Alt+Enter` to use the **Reveal** quick-fix.
+
+---
+
+## Troubleshooting & FAQ
+
+**I purchased a Pro trial, but the features aren't unlocking?**
+Because EnvY integrates deeply with the JetBrains licensing API, **you must restart your IDE** after starting a trial or purchasing a license for the Pro features (like Ghost Completion and Secret Detection) to fully activate.
+
+**How do I report a bug or request a feature?**
+Please open an issue on our [GitHub Issue Tracker](https://github.com/Hoteira/envy/issues).
+
+---
 
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE).
+
+
