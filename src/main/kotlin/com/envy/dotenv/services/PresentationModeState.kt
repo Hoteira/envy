@@ -33,6 +33,10 @@ class PresentationModeState(private val project: Project) : Disposable {
     fun isRevealed(file: VirtualFile, startOffset: Int): Boolean {
         val markers = revealedMarkers[file.path] ?: return false
         markers.removeIf { !it.isValid }
+        if (markers.isEmpty()) {
+            revealedMarkers.remove(file.path)
+            return false
+        }
         return markers.any { it.startOffset == startOffset }
     }
 

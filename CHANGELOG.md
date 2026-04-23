@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.5.0]
+### Secret Leak Inspection
+Removed static caches to eliminate memory bloat and prevent plaintext secrets from leaking into JVM heap dumps.
+
+### Env File Service
+Implemented CachedValuesManager and debounced keystrokes to eliminate GC churn and keep typing buttery smooth.
+
+### License Checker
+Added tri-state verification to fail-open gracefully during IDE startup, fixing the trial lockout race condition.
+
+### Env Diff Tool
+Tied row colors directly to the table model rather than a separate list, preventing visual bugs when users sort the table.
+
 
 ## [2.4.1]
 - Small optimizations

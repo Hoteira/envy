@@ -20,19 +20,25 @@ import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.Computable
-import com.intellij.openapi.util.SimpleModificationTracker
+import com.intellij.openapi.util.ModificationTracker
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
 import com.intellij.psi.util.CachedValue
 import com.intellij.util.Alarm
 import com.envy.dotenv.language.DotEnvFileType
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 @Service(Service.Level.PROJECT)
 class EnvFileService(private val project: Project) : Disposable {
 
+    private companion object {
+        const val MAX_ENV_FILE_SIZE = 5L * 1024 * 1024 // 5 MB
+    }
+
     private val fileKeyValues = ConcurrentHashMap<String, Map<String, String>>()
-    private val modificationTracker = SimpleModificationTracker()
+    private val modificationCount = AtomicLong()
+    private val modificationTracker = ModificationTracker { modificationCount.get() }
     private val pendingFiles = ConcurrentHashMap.newKeySet<VirtualFile>()
     private val debounceAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
 
@@ -107,13 +113,13 @@ class EnvFileService(private val project: Project) : Disposable {
                 if (needsFileListUpdate) {
                     ApplicationManager.getApplication().executeOnPooledThread {
                         if (disposed) return@executeOnPooledThread
-                        modificationTracker.incModificationCount()
+                        modificationCount.incrementAndGet()
                         for (file in fileListCachedValue.value) {
                             if (!fileKeyValues.containsKey(file.path)) {
                                 parseAndStore(file)
                             }
                         }
-                        modificationTracker.incModificationCount()
+                        modificationCount.incrementAndGet()
                     }
                 } else if (updatedFiles.isNotEmpty()) {
                     ApplicationManager.getApplication().executeOnPooledThread {
@@ -121,7 +127,7 @@ class EnvFileService(private val project: Project) : Disposable {
                         for (file in updatedFiles) {
                             parseAndStore(file)
                         }
-                        modificationTracker.incModificationCount()
+                        modificationCount.incrementAndGet()
                     }
                 }
             }
@@ -146,7 +152,7 @@ class EnvFileService(private val project: Project) : Disposable {
             for (file in fileListCachedValue.value) {
                 parseAndStore(file)
             }
-            modificationTracker.incModificationCount()
+            modificationCount.incrementAndGet()
         }
     }
 
@@ -157,7 +163,7 @@ class EnvFileService(private val project: Project) : Disposable {
         for (file in files) {
             parseAndStore(file)
         }
-        modificationTracker.incModificationCount()
+        modificationCount.incrementAndGet()
     }
 
     private fun parseAndStore(file: VirtualFile, document: com.intellij.openapi.editor.Document? = null) {
@@ -167,6 +173,7 @@ class EnvFileService(private val project: Project) : Disposable {
         }
         val text = ApplicationManager.getApplication().runReadAction(Computable<CharSequence?> {
             if (!file.isValid) return@Computable null
+            if (file.length > MAX_ENV_FILE_SIZE) return@Computable null
             val doc = document ?: FileDocumentManager.getInstance().getCachedDocument(file)
             doc?.immutableCharSequence ?: VfsUtilCore.loadText(file)
         })
@@ -185,7 +192,7 @@ class EnvFileService(private val project: Project) : Disposable {
         val existing = fileKeyValues[file.path]
         if (existing != null) return existing
 
-        if (!file.isValid) return emptyMap()
+        if (!file.isValid || file.length > MAX_ENV_FILE_SIZE) return emptyMap()
         val text = ApplicationManager.getApplication().runReadAction(Computable<CharSequence?> {
             if (!file.isValid) return@Computable null
             val doc = FileDocumentManager.getInstance().getCachedDocument(file)

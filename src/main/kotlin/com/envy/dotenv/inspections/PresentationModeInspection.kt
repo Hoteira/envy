@@ -71,18 +71,25 @@ class RevealSecretFix(private val key: String, private val valueOffset: Int) : L
 
     override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
         val vFile = descriptor.psiElement?.containingFile?.virtualFile ?: return
-        val editor = FileEditorManager.getInstance(project)
-            .getEditors(vFile).filterIsInstance<TextEditor>().firstOrNull()?.editor ?: return
+        val editors = FileEditorManager.getInstance(project)
+            .getEditors(vFile).filterIsInstance<TextEditor>().map { it.editor }
+        if (editors.isEmpty()) return
 
         val state = project.getService(com.envy.dotenv.services.PresentationModeState::class.java)
+        var marked = false
 
-        editor.foldingModel.runBatchFoldingOperation {
-            editor.foldingModel.allFoldRegions
-                .filter { it.placeholderText == "***" && valueOffset in it.startOffset..it.endOffset }
-                .forEach { 
-                    it.isExpanded = true
-                    state.markRevealed(vFile, editor.document, it.startOffset, it.endOffset)
-                }
+        for (editor in editors) {
+            editor.foldingModel.runBatchFoldingOperation {
+                editor.foldingModel.allFoldRegions
+                    .filter { it.placeholderText == "***" && valueOffset in it.startOffset..it.endOffset }
+                    .forEach {
+                        it.isExpanded = true
+                        if (!marked) {
+                            state.markRevealed(vFile, editor.document, it.startOffset, it.endOffset)
+                            marked = true
+                        }
+                    }
+            }
         }
     }
 }
@@ -93,22 +100,25 @@ class RevealAllSecretsFix : LocalQuickFix {
 
     override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
         val vFile = descriptor.psiElement?.containingFile?.virtualFile ?: return
-        val editor = FileEditorManager.getInstance(project)
-            .getEditors(vFile).filterIsInstance<TextEditor>().firstOrNull()?.editor ?: return
+        val editors = FileEditorManager.getInstance(project)
+            .getEditors(vFile).filterIsInstance<TextEditor>().map { it.editor }
+        if (editors.isEmpty()) return
 
         val state = project.getService(com.envy.dotenv.services.PresentationModeState::class.java)
+        val revealedOffsets = mutableListOf<Pair<Int, Int>>()
 
-        editor.foldingModel.runBatchFoldingOperation {
-            val revealedOffsets = mutableListOf<Pair<Int, Int>>()
-            editor.foldingModel.allFoldRegions
-                .filter { it.placeholderText == "***" && !it.isExpanded }
-                .forEach { 
-                    it.isExpanded = true
-                    revealedOffsets.add(Pair(it.startOffset, it.endOffset))
-                }
-            if (revealedOffsets.isNotEmpty()) {
-                state.markAllRevealed(vFile, editor.document, revealedOffsets)
+        for (editor in editors) {
+            editor.foldingModel.runBatchFoldingOperation {
+                editor.foldingModel.allFoldRegions
+                    .filter { it.placeholderText == "***" && !it.isExpanded }
+                    .forEach {
+                        it.isExpanded = true
+                        revealedOffsets.add(Pair(it.startOffset, it.endOffset))
+                    }
             }
+        }
+        if (revealedOffsets.isNotEmpty()) {
+            state.markAllRevealed(vFile, editors.first().document, revealedOffsets)
         }
     }
 }
