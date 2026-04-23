@@ -22,11 +22,13 @@ object EnvParser {
         "dotenv", "source_env", "source_up", "layout ", "use ", "PATH_add", "path_add", "watch_file", "log_"
     )
 
+    private const val BOM = '\uFEFF'
+
     fun parse(text: CharSequence): ParseResult {
         val entries = mutableListOf<EnvEntry>()
         val lineStartOffsets = mutableListOf<Int>()
-        
-        var pos = 0
+
+        var pos = if (text.isNotEmpty() && text[0] == BOM) 1 else 0
         var lineIndex = 0
         val length = text.length
         
@@ -71,10 +73,16 @@ object EnvParser {
         if (sepIndex <= 0) return
         
         val key = effective.substring(0, sepIndex).trim()
-        val value = effective.substring(sepIndex + 1).trim()
-            .removeSurrounding("\"")
-            .removeSurrounding("'")
-            .removeSurrounding("`")
+        val rawValue = effective.substring(sepIndex + 1).trim()
+        val value = when {
+            rawValue.length >= 2 && rawValue.startsWith('"') && rawValue.endsWith('"') ->
+                processEscapes(rawValue.substring(1, rawValue.length - 1))
+            rawValue.length >= 2 && rawValue.startsWith('\'') && rawValue.endsWith('\'') ->
+                rawValue.substring(1, rawValue.length - 1)
+            rawValue.length >= 2 && rawValue.startsWith('`') && rawValue.endsWith('`') ->
+                rawValue.substring(1, rawValue.length - 1)
+            else -> rawValue
+        }
             
         val leadingWhitespace = s - start
         val exportOffset = if (trimmed.startsWith("export ")) {
@@ -84,5 +92,27 @@ object EnvParser {
         }
         
         entries.add(EnvEntry(key, value, index, lineStartOffset + leadingWhitespace + exportOffset))
+    }
+
+    private fun processEscapes(s: String): String {
+        if (!s.contains('\\')) return s
+        val sb = StringBuilder(s.length)
+        var i = 0
+        while (i < s.length) {
+            if (s[i] == '\\' && i + 1 < s.length) {
+                when (s[i + 1]) {
+                    'n' -> { sb.append('\n'); i += 2 }
+                    'r' -> { sb.append('\r'); i += 2 }
+                    't' -> { sb.append('\t'); i += 2 }
+                    '\\' -> { sb.append('\\'); i += 2 }
+                    '"' -> { sb.append('"'); i += 2 }
+                    else -> { sb.append(s[i]); i++ }
+                }
+            } else {
+                sb.append(s[i])
+                i++
+            }
+        }
+        return sb.toString()
     }
 }
