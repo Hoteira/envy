@@ -30,8 +30,9 @@ EnvY brings first-class `.env` file support to all JetBrains IDEs. Syntax highli
 | Secret values hidden in presentation mode |  ✓   | ✓ |
 | Quick-fix: reveal hidden key / reveal all |  ✓   | ✓ |
 | Env var autocomplete in code |  ✓   | ✓ |
-| Terminal secret censoring |  ✓   | ✓ |
-| Toggle secret visibility (Ctrl+Alt+Shift+X) |  ✓   | ✓ |
+| Terminal secret censoring |      | ✓ |
+| Toggle secret visibility (Ctrl+Alt+Shift+X) |      | ✓ |
+| Clipboard redaction on copy |      | ✓ |
 | Run/Debug console secret redaction |      | ✓ |
 | Secret leak detection |      | ✓ |
 | Gitignore verification for secrets |      | ✓ |
@@ -74,7 +75,7 @@ A dedicated tool window for comparing environment files side by side. Select any
 - **Value mismatches** — same key, different values across environments
 - **Matching entries** — confirmation that configs are synced
 
-### Secret Leak Protection (Pro)
+### Secret Leak Protection <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
 
 Detects hardcoded secrets — AWS keys, Stripe keys, GitHub tokens, JWTs, and more — with regex pattern matching and key name heuristics. Warns when `.env` files containing secrets are not gitignored, with one-click quick-fixes to add them to `.gitignore` or replace values with placeholders.
 
@@ -89,6 +90,22 @@ Full support for `.envrc` files used by direnv. Environment variables defined wi
 ### Env Var Autocomplete 
 
 Context-aware autocomplete for environment variable access patterns across 10+ languages — JavaScript, Python, Rust, PHP, Ruby, Go, Java, Kotlin, C#, and more. Includes **low-latency inline ghost completion** (Tab to accept) powered by an asynchronous caching engine.
+
+### Terminal Secret Censor <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
+
+Hides values from your `.env` files in the integrated terminal as soon as they appear in output — `printenv`, `aws sts get-caller-identity`, `docker run` echoes, anything. Censoring is incremental and chunk-aware so split PTY frames still match, and the renderer paints `***` over the underlying text without mutating the document.
+
+**Clipboard-safe by design.** Copying a selection that overlaps a censored span puts `***` on the clipboard instead of the secret, so accidental Ctrl+C → paste-into-Slack moments don't leak credentials. Press `Ctrl+Alt+Shift+X` (or `⌘+⌥+Shift+X` on macOS) to toggle reveal/hide across every open terminal at once.
+
+### Run/Debug Console Secret Redaction <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
+
+Redacts secrets from Run/Debug console output before it renders — application logs, crash dumps, stack traces, and exception messages. Plaintext secrets never reach the IDE's console buffer, so they can't be scrolled back to or copied out later.
+
+### SOPS Encrypted File Support <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
+
+First-class editing of [SOPS](https://github.com/getsops/sops)-encrypted `.env` files via a split editor: raw ciphertext on the left, editable plaintext on the right. Decryption and re-encryption happen entirely in-memory — plaintext never touches disk and is never seen by the IDE indexer. Saves transparently re-encrypt with the original recipients pulled from the file's SOPS metadata.
+
+Supports complex key-management setups out of the box: AWS profiles, IAM assumed roles, KMS ARNs, and age/PGP recipients. Requires the [`sops` CLI](https://github.com/getsops/sops#install) on `PATH`.
 
 ## Installation
 
@@ -113,11 +130,11 @@ When EnvY detects a **duplicate key** or an **exposed secret** <img src="https:/
 * Press `Alt+Enter` (Windows/Linux) or `⌥+Enter` (macOS) to open the context menu.
 * Select the desired action (e.g., **"Add to .gitignore"** or **"Replace secret with placeholder"**).
 
-### Terminal Secret Censor <img src="https://img.shields.io/badge/FREE-44cc11.svg?style=flat" height="22" align="absmiddle">
-EnvY automatically censors detected secrets in your terminal output so they are never printed in plaintext.
+### Terminal Secret Censor <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
+EnvY automatically censors detected secrets in your terminal output so they are never printed in plaintext. Copying a censored selection puts `***` on the clipboard in place of the secret, so the underlying value never leaks via paste.
 * If you need to momentarily view the hidden secrets in the terminal, press `Ctrl+Alt+Shift+X` (or `Cmd+Option+Shift+X` on macOS) to instantly toggle them revealed or hidden.
 
-### Run/Debug Console Secret Redaction <img src="https://img.shields.io/badge/FREE-44cc11.svg?style=flat" height="22" align="absmiddle">
+### Run/Debug Console Secret Redaction <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
 Automatically redacts secrets from application logs, crash reports, and stack traces in the IDE's Run/Debug console. Secrets are replaced with `***` before they render on screen, so they never appear in plaintext.
 
 ### Ghost Text Autocomplete <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">

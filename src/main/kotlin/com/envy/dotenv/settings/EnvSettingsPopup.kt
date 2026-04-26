@@ -37,7 +37,7 @@ object EnvSettingsPopup {
         FeatureRow(FeatureId.DUPLICATE, "Duplicate Key Detection", false, { it.duplicateKeyDetection }, { s, v -> s.duplicateKeyDetection = v }),
         FeatureRow(FeatureId.PRESENTATION, "Presentation Mode", false, { it.presentationMode }, { s, v -> s.presentationMode = v }),
         FeatureRow(FeatureId.AUTOCOMPLETE, "Env Var Autocomplete", false, { it.envVarAutocomplete }, { s, v -> s.envVarAutocomplete = v }),
-        FeatureRow(FeatureId.TERMINAL_CENSOR, "Terminal Secret Censor (Ctrl+Alt+Shift+X)", false, { it.terminalSecretCensor }, { s, v -> s.terminalSecretCensor = v }),
+        FeatureRow(FeatureId.TERMINAL_CENSOR, "Terminal Secret Censor (Ctrl+Alt+Shift+X)", true, { it.terminalSecretCensor }, { s, v -> s.terminalSecretCensor = v }),
         FeatureRow(FeatureId.CONSOLE_REDACTION, "Console Secret Redaction", true, { it.consoleSecretRedaction }, { s, v -> s.consoleSecretRedaction = v }),
         FeatureRow(FeatureId.SECRET_LEAK, "Secret Leak Detection", true, { it.secretLeakDetection }, { s, v -> s.secretLeakDetection = v }),
         FeatureRow(FeatureId.GHOST_COMPLETION, "Inline Ghost Completion", true, { it.inlineGhostCompletion }, { s, v -> s.inlineGhostCompletion = v }),
