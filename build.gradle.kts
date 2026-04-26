@@ -141,6 +141,13 @@ tasks {
     publishPlugin {
         dependsOn(patchChangelog)
     }
+
+    // Enable Pro features during local development / testing
+    named<org.jetbrains.intellij.platform.gradle.tasks.RunIdeTask>("runIde") {
+        jvmArgumentProviders += CommandLineArgumentProvider {
+            listOf("-Denvy.dev.pro=false")
+        }
+    }
 }
 
 intellijPlatformTesting {

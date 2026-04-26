@@ -40,6 +40,9 @@ class DotEnvSyntaxHighlighter : SyntaxHighlighterBase() {
 
 class DotEnvSyntaxHighlighterFactory : SyntaxHighlighterFactory() {
     override fun getSyntaxHighlighter(project: Project?, virtualFile: VirtualFile?): SyntaxHighlighter {
+        if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.syntaxHighlighting) {
+            return com.intellij.openapi.fileTypes.PlainSyntaxHighlighter()
+        }
         return DotEnvSyntaxHighlighter()
     }
 }

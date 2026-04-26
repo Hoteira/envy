@@ -62,6 +62,7 @@ class EnvVarCompletionProvider : CompletionProvider<CompletionParameters>() {
         result: CompletionResultSet
     ) {
         if (parameters.originalFile.fileType is DotEnvFileType) return
+        if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.envVarAutocomplete) return
 
         val project = parameters.position.project
         val editor = parameters.editor

@@ -19,6 +19,7 @@ class DuplicateKeyInspection : LocalInspectionTool() {
         return object : PsiElementVisitor() {
             override fun visitFile(file: PsiFile) {
                 if (file !is DotEnvFile) return
+                if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.duplicateKeyDetection) return
 
                 val entries = PsiEnvExtractor.extractEntries(file)
                 val document = com.intellij.psi.PsiDocumentManager.getInstance(holder.project).getDocument(file) ?: return

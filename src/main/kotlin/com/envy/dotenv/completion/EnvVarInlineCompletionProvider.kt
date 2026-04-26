@@ -14,21 +14,25 @@ class EnvVarInlineCompletionProvider : InlineCompletionProvider {
 
     companion object {
         // Quick-check keywords — if none appear, skip regex matching entirely
-        private val quickCheckKeywords = arrayOf("env", "ENV", "os.", "getenv", "Getenv", "dotenv", "process")
+        private val quickCheckKeywords = arrayOf("env", "ENV", "os.", "getenv", "Getenv", "dotenv", "process", "import.meta", "Environment")
 
         private val envPatterns = listOf(
             Regex("""process\.env\.(\w*)$"""),
             Regex("""process\.env\[["'](\w*)$"""),
+            Regex("""import\.meta\.env\.(\w*)$"""),
             Regex("""os\.environ\[["'](\w*)$"""),
             Regex("""os\.environ\.get\(["'](\w*)$"""),
             Regex("""os\.getenv\(["'](\w*)$"""),
             Regex("""env::var\(["'](\w*)$"""),
             Regex("""std::env::var\(["'](\w*)$"""),
             Regex("""getenv\(["'](\w*)$"""),
-            Regex("""System\.getenv\(["'](\w*)$"""),
-            Regex("""os\.Getenv\(["'](\w*)$"""),
+            Regex("""\${'$'}_ENV\[["'](\w*)$"""),
+            Regex("""env\(["'](\w*)$"""),
             Regex("""ENV\[["'](\w*)$"""),
-            Regex("""env\(["'](\w*)$""")
+            Regex("""os\.Getenv\(["'](\w*)$"""),
+            Regex("""System\.getenv\(["'](\w*)$"""),
+            Regex("""Environment\.GetEnvironmentVariable\(["'](\w*)$"""),
+            Regex("""dotenv\[["'](\w*)$""")
         )
     }
 
@@ -38,6 +42,7 @@ class EnvVarInlineCompletionProvider : InlineCompletionProvider {
     override fun isEnabled(event: InlineCompletionEvent): Boolean {
         if (event !is InlineCompletionEvent.DocumentChange) return false
         if (event.editor.virtualFile?.fileType is DotEnvFileType) return false
+        if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.inlineGhostCompletion) return false
         return LicenseChecker.isPaidFeatureAvailable()
     }
 

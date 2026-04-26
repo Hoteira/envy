@@ -39,11 +39,16 @@ object PsiEnvExtractor {
             node = node.treeNext
         }
         val kNode = keyNode ?: return null
-        val rawValue = valueNode?.text ?: ""
-        val value = rawValue.trim()
-            .removeSurrounding("\"")
-            .removeSurrounding("'")
-            .removeSurrounding("`")
+        val rawValue = (valueNode?.text ?: "").trim()
+        val value = when {
+            rawValue.length >= 2 && rawValue.startsWith('"') && rawValue.endsWith('"') ->
+                EnvParser.processEscapes(rawValue.substring(1, rawValue.length - 1))
+            rawValue.length >= 2 && rawValue.startsWith('\'') && rawValue.endsWith('\'') ->
+                rawValue.substring(1, rawValue.length - 1)
+            rawValue.length >= 2 && rawValue.startsWith('`') && rawValue.endsWith('`') ->
+                rawValue.substring(1, rawValue.length - 1)
+            else -> rawValue
+        }
         return PsiEnvEntry(kNode.text, value, kNode, valueNode)
     }
 }

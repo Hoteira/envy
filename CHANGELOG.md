@@ -1,18 +1,39 @@
 # Changelog
 
-## [2.5.0]
+## [3.0.0]
+
+### SOPS Integration
+- **Real-time Split View:** Seamlessly edit SOPS-encrypted `.env` files with a side-by-side view showing raw ciphertext and editable plaintext.
+- **Enterprise Key Management:** Full support for AWS profiles, IAM assumed roles, and KMS ARNs.
+- **In-Memory Security:** Decryption and re-encryption happen entirely in-memory—no unencrypted temporary files ever touch your disk.
+- **Improved Stability:** Resolved IDE-wide exceptions during decryption and fixed re-encryption failures by automatically extracting target keys from metadata.
+
+### Terminal & Console Security
+- **Terminal Secret Censor:** Automatically masks detected secrets in your terminal output. Press `Ctrl+Alt+Shift+X` to instantly toggle visibility.
+- **Console Redaction:** Real-time redaction of sensitive environment variables in Run/Debug console logs and stack traces. Now a PRO feature.
+
+### Pricing Update
+To support the ongoing development of security features like our new SOPS integration and real-time terminal redaction we are adjusting our subscription pricing for new licenses to $4.00/month for individuals and $10.00/month for organizations. This shift allows us to maintain the high standard of security, performance, and stability that professional engineering teams require from EnvY. **Existing active subscribers are grandfathered into their current rates.**
+
+### Performance & Stability
+- **Zero-Allocation Reads:** Refactored inspections to use `charsSequence`, eliminating massive string allocations and GC spikes on large files.
+- **UI Responsiveness:** Moved SOPS encryption detection to background threads with non-blocking VFS reads to prevent UI micro-stutters.
+- **Memory Management:** Implemented automatic cleanup of cached sessions when files are deleted or moved to prevent memory leaks.
+- **Architectural Cleanup:** Migrated to modern JetBrains APIs (BulkFileListener, FileDocumentManagerListener.TOPIC) for better compatibility with 2025.x IDEs.
+
 ### Secret Leak Inspection
-Removed static caches to eliminate memory bloat and prevent plaintext secrets from leaking into JVM heap dumps.
+- Unified Gitignore verification with secret scanning.
+- Removed static caches to eliminate memory bloat and prevent plaintext secrets from leaking into JVM heap dumps.
 
 ### Env File Service
-Implemented CachedValuesManager and debounced keystrokes to eliminate GC churn and keep typing buttery smooth.
+- Implemented CachedValuesManager and debounced keystrokes to eliminate GC churn and keep typing buttery smooth.
 
 ### License Checker
-Added tri-state verification to fail-open gracefully during IDE startup, fixing the trial lockout race condition.
+- Pro feature initialization now properly awaits the background license check, preventing UI flickering and broken startup states for Editor notifications.
+- Added tri-state verification to fail-open gracefully during IDE startup, fixing the trial lockout race condition.
 
 ### Env Diff Tool
-Tied row colors directly to the table model rather than a separate list, preventing visual bugs when users sort the table.
-
+- Tied row colors directly to the table model rather than a separate list, preventing visual bugs when users sort the table.
 
 ## [2.4.1]
 - Small optimizations
@@ -23,7 +44,7 @@ Tied row colors directly to the table model rather than a separate list, prevent
 ### Dynamic Plugin Loading
 - Plugin can now be enabled, disabled, and updated without restarting the IDE
 ### 1k Downloads Gift
-- Standard code completion has become a free feature to celebrate teh first 1k downloads!
+- Standard code completion has become a free feature to celebrate the first 1k downloads!
 ### Licensing
 - Final license checking integrating the default JetBrains template with async execution
 ### Diff Tool UI Bug Fix
@@ -31,8 +52,7 @@ Tied row colors directly to the table model rather than a separate list, prevent
 ## [2.3.1]
 ### UI & Behavior
 - **Independent Column Resizing:** Changed the `EnvDiffToolWindow` resize behavior so adjusting the width of one column no longer forcefully resizes the others.
-- **Optimistic UI Initialization:** The plugin now optimistically initializes Pro features (like `SecretLeakChecker`) instantly on startup. This completely prevents UI blocking and flickering while
-the asynchronous license validation completes in the background.
+- **Optimistic UI Initialization:** The plugin now optimistically initializes Pro features (like `SecretLeakChecker`) instantly on startup. This completely prevents UI blocking and flickering while the asynchronous license validation completes in the background.
 
 ## [2.3.0]
 ### Performance & UX

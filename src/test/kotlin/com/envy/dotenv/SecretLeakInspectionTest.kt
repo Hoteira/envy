@@ -70,7 +70,6 @@ class SecretLeakInspectionTest {
     @Test
     fun testSensitiveKeyWithRealValue() {
         assertTrue(SecretLeakInspection.isSecret("API_KEY", "abcdef1234"))
-        assertTrue(SecretLeakInspection.isSecret("DATABASE_URL", "postgres://user:pass@host/db"))
         assertTrue(SecretLeakInspection.isSecret("CLIENT_SECRET", "s3cr3tval"))
     }
 

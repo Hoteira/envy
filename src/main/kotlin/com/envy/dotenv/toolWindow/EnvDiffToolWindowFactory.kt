@@ -108,41 +108,43 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Dispo
     }
 
     private fun loadFiles() {
-        pendingLoad?.cancel(false)
         loading = true
-        pendingLoad = com.intellij.openapi.application.ReadAction.nonBlocking(java.util.concurrent.Callable {
-            val files = service.findEnvFiles()
-            val baseDir = project.guessProjectDir()
-            files.associate { file ->
-                val relativePath = if (baseDir != null) {
-                    file.path.removePrefix(baseDir.path).removePrefix("/")
-                } else {
-                    file.name
+        com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+            if (disposed || project.isDisposed) return@executeOnPooledThread
+            
+            val result = com.intellij.openapi.application.ApplicationManager.getApplication().runReadAction(com.intellij.openapi.util.Computable {
+                if (project.isDisposed) return@Computable emptyMap<String, Map<String, String>>()
+                val files = service.findEnvFiles()
+                val baseDir = project.guessProjectDir()
+                files.associate { file ->
+                    val relativePath = if (baseDir != null) {
+                        file.path.removePrefix(baseDir.path).removePrefix("/")
+                    } else {
+                        file.name
+                    }
+                    relativePath to service.parseEnvFile(file)
                 }
-                relativePath to service.parseEnvFile(file)
-            }
-        })
-            .expireWith(this)
-        .finishOnUiThread(com.intellij.openapi.application.ModalityState.defaultModalityState()) { result ->
-            if (disposed || project.isDisposed || !isDisplayable) return@finishOnUiThread
-            envFiles = result
-            leftCombo.removeAllItems()
-            rightCombo.removeAllItems()
+            })
 
-            for (name in envFiles.keys) {
-                leftCombo.addItem(name)
-                rightCombo.addItem(name)
-            }
+            com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater({
+                if (disposed || project.isDisposed || !isDisplayable) return@invokeLater
+                envFiles = result
+                leftCombo.removeAllItems()
+                rightCombo.removeAllItems()
 
-            if (envFiles.size >= 2) {
-                leftCombo.selectedIndex = 0
-                rightCombo.selectedIndex = 1
-            }
-            loading = false
-            pendingLoad = null
-            updateDiff()
+                for (name in envFiles.keys) {
+                    leftCombo.addItem(name)
+                    rightCombo.addItem(name)
+                }
+
+                if (envFiles.size >= 2) {
+                    leftCombo.selectedIndex = 0
+                    rightCombo.selectedIndex = 1
+                }
+                loading = false
+                updateDiff()
+            }, com.intellij.openapi.application.ModalityState.defaultModalityState())
         }
-        .submit(com.intellij.util.concurrency.AppExecutorUtil.getAppExecutorService())
     }
 
     private fun updateDiff() {
@@ -181,7 +183,6 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Dispo
 
     override fun dispose() {
         disposed = true
-        pendingLoad?.cancel(true)
         pendingLoad = null
         envFiles = emptyMap()
     }

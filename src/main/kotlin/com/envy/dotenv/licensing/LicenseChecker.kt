@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets
 import java.security.Signature
 import java.security.cert.*
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicBoolean
 
 object LicenseChecker {
 
@@ -88,32 +89,66 @@ object LicenseChecker {
 
     @Volatile private var cachedAvailable: Boolean = true
     @Volatile private var cacheExpiry: Long = 0L
-    @Volatile private var isChecking: Boolean = false
+    private val isChecking = AtomicBoolean(false)
     @Volatile private var hasCheckedOnce: Boolean = false
+    @Volatile private var nextCheckTime: Long = 0L
 
     fun isPaidFeatureAvailable(): Boolean {
-        if (System.getProperty("envy.dev.pro") == "true") return true
+        //if (System.getProperty("envy.dev.pro") == "true") return true
         val now = System.currentTimeMillis()
 
         if (hasCheckedOnce && now < cacheExpiry) return cachedAvailable
 
-        if (!isChecking) {
-            isChecking = true
+        if (now >= nextCheckTime) {
+            triggerCheck()
+        }
+
+        return if (hasCheckedOnce) cachedAvailable else true
+    }
+
+    fun isPaidFeatureAvailableStrict(): Boolean {
+        //if (System.getProperty("envy.dev.pro") == "true") return true
+        val now = System.currentTimeMillis()
+
+        if (hasCheckedOnce && now < cacheExpiry) return cachedAvailable
+
+        if (now >= nextCheckTime) {
+            triggerCheck()
+        }
+
+        return if (hasCheckedOnce) cachedAvailable else false
+    }
+
+    private fun triggerCheck() {
+        if (isChecking.compareAndSet(false, true)) {
             ApplicationManager.getApplication().executeOnPooledThread {
                 try {
                     val result = computeAvailability()
                     if (result != null) {
+                        val firstCheck = !hasCheckedOnce
                         cachedAvailable = result
                         cacheExpiry = System.currentTimeMillis() + 30_000L
+                        nextCheckTime = cacheExpiry
                         hasCheckedOnce = true
+
+                        if (firstCheck) {
+                            ApplicationManager.getApplication().invokeLater {
+                                val pm = com.intellij.openapi.project.ProjectManager.getInstance()
+                                for (proj in pm.openProjects) {
+                                    if (!proj.isDisposed) {
+                                        com.intellij.ui.EditorNotifications.getInstance(proj).updateAllNotifications()
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        nextCheckTime = System.currentTimeMillis() + 5000L
                     }
                 } finally {
-                    isChecking = false
+                    isChecking.set(false)
                 }
             }
         }
-
-        return if (hasCheckedOnce) cachedAvailable else true
     }
 
     private fun computeAvailability(): Boolean? {
@@ -161,7 +196,8 @@ object LicenseChecker {
             val licenseData = String(licenseBytes, StandardCharsets.UTF_8)
             return licenseData.contains("\"licenseId\":\"$licenseId\"")
         } catch (e: Throwable) {
-            LOG.debug("Key validation failed", e)
+            if (e is com.intellij.openapi.progress.ProcessCanceledException) throw e
+            LOG.debug("Validation failed", e)
         }
         return false
     }
@@ -259,6 +295,7 @@ object LicenseChecker {
                 return cert
             }
         } catch (e: Exception) {
+            if (e is com.intellij.openapi.progress.ProcessCanceledException) throw e
             LOG.debug("Certificate chain validation failed", e)
         }
         throw Exception("Certificate used to sign the license is not signed by JetBrains root certificate")

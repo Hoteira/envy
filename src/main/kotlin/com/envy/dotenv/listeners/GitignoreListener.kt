@@ -27,6 +27,7 @@ class GitignoreListener : AsyncFileListener {
                         }
                     }
                 } catch (e: Exception) {
+                    if (e is com.intellij.openapi.progress.ProcessCanceledException) throw e
                     LOG.warn("Failed to reparse .env files after .gitignore change", e)
                 }
             }
