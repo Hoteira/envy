@@ -1,11 +1,16 @@
 package com.envy.dotenv.terminal
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.actionSystem.EditorActionHandler
+import com.intellij.openapi.editor.actionSystem.EditorActionManager
 import com.intellij.openapi.editor.colors.EditorFontType
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
@@ -17,13 +22,16 @@ import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.util.Computable
 import com.intellij.openapi.util.Key
 import com.intellij.util.Alarm
+import java.awt.datatransfer.StringSelection
 import com.envy.dotenv.inspections.SecretLeakInspection
+import com.envy.dotenv.licensing.LicenseChecker
 import com.envy.dotenv.services.EnvFileService
 import java.awt.Color
 import java.awt.Font
@@ -40,9 +48,24 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
     companion object {
         private val LOG = Logger.getInstance(TerminalSecretCensor::class.java)
         private val INVISIBLE_TEXT = TextAttributes(Color(0, 0, 0, 0), null, null, null, Font.PLAIN)
+        internal val SESSION_KEY = Key.create<Session>("envy.terminalSecretCensor.session")
+
+        @Volatile private var copyHandlerInstalled = false
+        private val copyHandlerLock = Any()
+
+        private fun ensureCopyHandlerInstalled() {
+            if (copyHandlerInstalled) return
+            synchronized(copyHandlerLock) {
+                if (copyHandlerInstalled) return
+                val mgr = EditorActionManager.getInstance()
+                val original = mgr.getActionHandler(IdeActions.ACTION_EDITOR_COPY)
+                mgr.setActionHandler(IdeActions.ACTION_EDITOR_COPY, RedactingCopyHandler(original))
+                copyHandlerInstalled = true
+            }
+        }
     }
 
-    private class Session {
+    internal class Session {
         var acState: Int = 0
         var scannedUpTo: Int = 0
         var needsFullRescan: Boolean = true
@@ -92,6 +115,8 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
     private val terminalCheck: (Editor) -> Boolean = resolveTerminalCheck()
 
     init {
+        ensureCopyHandlerInstalled()
+
         EditorFactory.getInstance().addEditorFactoryListener(object : EditorFactoryListener {
             override fun editorCreated(event: EditorFactoryEvent) {
                 if (disposed) return
@@ -116,7 +141,8 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
             }
 
             override fun editorReleased(event: EditorFactoryEvent) {
-                sessions.remove(event.editor)
+                val ed = event.editor
+                if (sessions.remove(ed) != null) ed.putUserData(SESSION_KEY, null)
             }
         }, this)
 
@@ -150,9 +176,9 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
     private fun resolveTerminalCheck(): (Editor) -> Boolean {
         val reflective = buildReflectiveCheck()
         return { editor ->
-            (reflective != null && reflective(editor))
+            checkEditorKindOrFile(editor)
                     || checkUserDataKeys(editor)
-                    || checkEditorKindOrFile(editor)
+                    || (reflective != null && reflective(editor))
                     || isInTerminalComponent(editor)
         }
     }
@@ -220,9 +246,11 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
 
     private fun track(editor: Editor) {
         if (sessions.containsKey(editor)) return
+        if (!LicenseChecker.isPaidFeatureAvailable()) return
         LOG.info("Tracking terminal editor ${editor.hashCode()}")
         val session = Session()
         sessions[editor] = session
+        editor.putUserData(SESSION_KEY, session)
         pendingEditors.add(editor)
         alarm.addRequest(::processPending, 10)
 
@@ -282,6 +310,10 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
     private fun processPending() {
         if (disposed || project.isDisposed) return
         if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.terminalSecretCensor) return
+        if (!LicenseChecker.isPaidFeatureAvailable()) {
+            if (sessions.isNotEmpty()) clearAll()
+            return
+        }
         val editors = pendingEditors.toList()
         pendingEditors.clear()
 
@@ -421,8 +453,75 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
     override fun dispose() {
         disposed = true
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(keyDispatcher)
+        for (editor in sessions.keys) {
+            try { editor.putUserData(SESSION_KEY, null) } catch (_: Throwable) {}
+        }
         sessions.clear()
         pendingEditors.clear()
+    }
+}
+
+/**
+ * Replaces the default EditorCopy handler so that selecting text containing
+ * a censored secret in a tracked terminal editor places "***" on the clipboard
+ * in place of the underlying secret bytes. Editors not tagged with SESSION_KEY
+ * fall through to the original handler unchanged.
+ */
+private class RedactingCopyHandler(private val delegate: EditorActionHandler) : EditorActionHandler() {
+
+    override fun doExecute(editor: Editor, caret: Caret?, dataContext: DataContext?) {
+        val session = editor.getUserData(TerminalSecretCensor.SESSION_KEY)
+
+        val sm = editor.selectionModel
+        if (session == null || session.isRevealed || !sm.hasSelection()) {
+            delegate.execute(editor, caret, dataContext)
+            return
+        }
+
+        val selStart = sm.selectionStart
+        val selEnd = sm.selectionEnd
+        val doc = editor.document.immutableCharSequence
+        if (selStart < 0 || selEnd > doc.length || selStart >= selEnd) {
+            delegate.execute(editor, caret, dataContext)
+            return
+        }
+
+        val overlapping = session.activeHighlighters
+            .asSequence()
+            .filter { it.isValid && it.startOffset < selEnd && it.endOffset > selStart }
+            .map { maxOf(it.startOffset, selStart) to minOf(it.endOffset, selEnd) }
+            .sortedBy { it.first }
+            .toList()
+
+        if (overlapping.isEmpty()) {
+            delegate.execute(editor, caret, dataContext)
+            return
+        }
+
+        val merged = mutableListOf<Pair<Int, Int>>()
+        for ((s, e) in overlapping) {
+            val last = merged.lastOrNull()
+            if (last != null && s <= last.second) {
+                merged[merged.lastIndex] = last.first to maxOf(last.second, e)
+            } else {
+                merged.add(s to e)
+            }
+        }
+
+        val sb = StringBuilder(selEnd - selStart)
+        var pos = selStart
+        for ((s, e) in merged) {
+            if (s > pos) sb.append(doc, pos, s)
+            sb.append("***")
+            pos = e
+        }
+        if (pos < selEnd) sb.append(doc, pos, selEnd)
+
+        try {
+            CopyPasteManager.getInstance().setContents(StringSelection(sb.toString()))
+        } catch (_: Throwable) {
+            delegate.execute(editor, caret, dataContext)
+        }
     }
 }
 
@@ -483,6 +582,7 @@ private val TERMINAL_KEY_NAMES = listOf(
 internal class TerminalSecretCensorInitializer : ProjectActivity {
     override suspend fun execute(project: Project) {
         if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.terminalSecretCensor) return
+        if (!LicenseChecker.isPaidFeatureAvailable()) return
         DumbService.getInstance(project).runWhenSmart {
             project.getService(TerminalSecretCensor::class.java)
         }

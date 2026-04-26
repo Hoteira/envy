@@ -10,7 +10,8 @@ class AhoCorasick private constructor(
     private val goto: Array<IntArray>,
     private val fail: IntArray,
     private val output: Array<List<Int>>,
-    private val patternLengths: IntArray
+    private val patternLengths: IntArray,
+    private val nonAsciiPatterns: List<String>
 ) {
 
     data class Match(val startOffset: Int, val endOffset: Int)
@@ -22,6 +23,10 @@ class AhoCorasick private constructor(
      * document rather than the chunk alone.  Returns all matches found
      * and the automaton state at the end (pass it as [initialState] for
      * the next chunk to handle secrets split across PTY frames).
+     *
+     * ASCII-only patterns ride the AC trie. Patterns containing chars
+     * >= ALPHABET_SIZE (e.g. unicode passwords like "P@sswörd") are
+     * scanned via a separate indexOf fallback so they aren't dropped.
      */
     fun scan(text: CharSequence, initialState: Int = 0, baseOffset: Int = 0): ScanResult {
         var state = initialState
@@ -41,6 +46,20 @@ class AhoCorasick private constructor(
             }
         }
 
+        if (nonAsciiPatterns.isNotEmpty()) {
+            val asString = text.toString()
+            for (pattern in nonAsciiPatterns) {
+                if (pattern.length > asString.length) continue
+                var idx = 0
+                while (true) {
+                    val found = asString.indexOf(pattern, idx)
+                    if (found < 0) break
+                    matches.add(Match(baseOffset + found, baseOffset + found + pattern.length))
+                    idx = found + 1
+                }
+            }
+        }
+
         return ScanResult(matches, state)
     }
 
@@ -48,22 +67,31 @@ class AhoCorasick private constructor(
         private const val ALPHABET_SIZE = 128
 
         /**
-         * Builds an automaton from [patterns].
-         * Returns null if no usable (non-empty, ASCII-only) patterns remain.
+         * Builds an automaton from [patterns]. ASCII-only patterns are
+         * compiled into the AC trie; patterns containing non-ASCII chars
+         * are kept as a fallback list scanned via [String.indexOf].
+         * Returns null only if no non-empty patterns remain at all.
          */
         fun build(patterns: List<String>): AhoCorasick? {
-            val filtered = patterns.filter { p -> p.isNotEmpty() && p.all { it.code < ALPHABET_SIZE } }
-            if (filtered.isEmpty()) return null
+            val nonEmpty = patterns.filter { it.isNotEmpty() }
+            if (nonEmpty.isEmpty()) return null
 
-            val maxStates = filtered.sumOf { it.length } + 1
+            val asciiPatterns = mutableListOf<String>()
+            val nonAsciiPatterns = mutableListOf<String>()
+            for (p in nonEmpty) {
+                if (p.all { it.code < ALPHABET_SIZE }) asciiPatterns.add(p)
+                else nonAsciiPatterns.add(p)
+            }
+
+            val maxStates = asciiPatterns.sumOf { it.length } + 1
             val goto = Array(maxStates) { IntArray(ALPHABET_SIZE) { -1 } }
             val fail = IntArray(maxStates)
             val output = Array(maxStates) { mutableListOf<Int>() }
-            val lengths = IntArray(filtered.size)
+            val lengths = IntArray(asciiPatterns.size)
             var stateCount = 1 // state 0 = root
 
             // --- build trie ---
-            for ((patIdx, pattern) in filtered.withIndex()) {
+            for ((patIdx, pattern) in asciiPatterns.withIndex()) {
                 lengths[patIdx] = pattern.length
                 var cur = 0
                 for (ch in pattern) {
@@ -97,7 +125,8 @@ class AhoCorasick private constructor(
                 Array(stateCount) { goto[it] },
                 fail.copyOf(stateCount),
                 Array(stateCount) { output[it].toList() },
-                lengths
+                lengths,
+                nonAsciiPatterns.toList()
             )
         }
     }
