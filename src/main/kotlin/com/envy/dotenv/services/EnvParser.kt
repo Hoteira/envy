@@ -86,7 +86,8 @@ object EnvParser {
             
         val leadingWhitespace = s - start
         val exportOffset = if (trimmed.startsWith("export ")) {
-            "export ".length + (trimmed.removePrefix("export ").length - trimmed.removePrefix("export ").trimStart().length)
+            val afterExport = trimmed.removePrefix("export ")
+            "export ".length + (afterExport.length - afterExport.trimStart().length)
         } else {
             0
         }
@@ -94,7 +95,7 @@ object EnvParser {
         entries.add(EnvEntry(key, value, index, lineStartOffset + leadingWhitespace + exportOffset))
     }
 
-    private fun processEscapes(s: String): String {
+    fun processEscapes(s: String): String {
         if (!s.contains('\\')) return s
         val sb = StringBuilder(s.length)
         var i = 0

@@ -28,6 +28,14 @@ import com.intellij.util.Alarm
 import com.envy.dotenv.language.DotEnvFileType
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+import com.intellij.util.messages.Topic
+
+interface EnvFileListener {
+    companion object {
+        val TOPIC = Topic.create("EnvFile changes", EnvFileListener::class.java)
+    }
+    fun envFilesChanged()
+}
 
 @Service(Service.Level.PROJECT)
 class EnvFileService(private val project: Project) : Disposable {
@@ -44,11 +52,22 @@ class EnvFileService(private val project: Project) : Disposable {
 
     @Volatile private var disposed = false
 
+    private fun isEnvPath(path: String): Boolean {
+        val name = path.substringAfterLast('/')
+        return name == ".env" || name == ".envrc" || (name.startsWith(".env.") && !name.contains('/'))
+    }
+
+    private fun notifyListeners() {
+        modificationCount.incrementAndGet()
+        ApplicationManager.getApplication().messageBus.syncPublisher(EnvFileListener.TOPIC).envFilesChanged()
+    }
+
     private val connection = ApplicationManager.getApplication().messageBus.connect(this)
 
     private val fileListCachedValue: CachedValue<List<VirtualFile>> =
         CachedValuesManager.getManager(project).createCachedValue {
             val files = ApplicationManager.getApplication().runReadAction(Computable {
+                com.intellij.openapi.progress.ProgressManager.checkCanceled()
                 if (project.isDisposed) return@Computable emptyList<VirtualFile>()
                 FileTypeIndex.getFiles(DotEnvFileType, GlobalSearchScope.projectScope(project)).filter { file ->
                     val p = file.path
@@ -95,7 +114,7 @@ class EnvFileService(private val project: Project) : Disposable {
 
                 for (event in events) {
                     val path = event.path
-                    if (path.endsWith(".env") || path.contains("/.env.")) {
+                    if (isEnvPath(path)) {
                         when (event) {
                             is VFileCreateEvent,
                             is VFileDeleteEvent,
@@ -113,13 +132,13 @@ class EnvFileService(private val project: Project) : Disposable {
                 if (needsFileListUpdate) {
                     ApplicationManager.getApplication().executeOnPooledThread {
                         if (disposed) return@executeOnPooledThread
-                        modificationCount.incrementAndGet()
+                        notifyListeners()
                         for (file in fileListCachedValue.value) {
                             if (!fileKeyValues.containsKey(file.path)) {
                                 parseAndStore(file)
                             }
                         }
-                        modificationCount.incrementAndGet()
+                        notifyListeners()
                     }
                 } else if (updatedFiles.isNotEmpty()) {
                     ApplicationManager.getApplication().executeOnPooledThread {
@@ -127,7 +146,7 @@ class EnvFileService(private val project: Project) : Disposable {
                         for (file in updatedFiles) {
                             parseAndStore(file)
                         }
-                        modificationCount.incrementAndGet()
+                        notifyListeners()
                     }
                 }
             }
@@ -138,7 +157,7 @@ class EnvFileService(private val project: Project) : Disposable {
                 if (disposed) return
                 val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
                 val path = file.path
-                if (path.endsWith(".env") || path.contains("/.env.")) {
+                if (isEnvPath(path)) {
                     pendingFiles.add(file)
                     debounceAlarm.cancelAllRequests()
                     debounceAlarm.addRequest({ processPendingFiles() }, 300)
@@ -152,7 +171,7 @@ class EnvFileService(private val project: Project) : Disposable {
             for (file in fileListCachedValue.value) {
                 parseAndStore(file)
             }
-            modificationCount.incrementAndGet()
+            notifyListeners()
         }
     }
 
@@ -163,7 +182,7 @@ class EnvFileService(private val project: Project) : Disposable {
         for (file in files) {
             parseAndStore(file)
         }
-        modificationCount.incrementAndGet()
+        notifyListeners()
     }
 
     private fun parseAndStore(file: VirtualFile, document: com.intellij.openapi.editor.Document? = null) {
@@ -210,6 +229,17 @@ class EnvFileService(private val project: Project) : Disposable {
     fun getAllKeysSorted(): List<String> = allKeysSortedCachedValue.value
 
     fun getAllKeyValues(): Map<String, String> = allKeyValuesCachedValue.value
+
+    fun getAllParsedEntries(): List<Pair<String, String>> {
+        val result = mutableListOf<Pair<String, String>>()
+        for (file in fileListCachedValue.value) {
+            val map = fileKeyValues[file.path] ?: continue
+            for ((key, value) in map) {
+                result.add(key to value)
+            }
+        }
+        return result
+    }
 
     override fun dispose() {
         disposed = true

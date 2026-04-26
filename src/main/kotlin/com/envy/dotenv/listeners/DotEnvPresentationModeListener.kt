@@ -12,6 +12,7 @@ import com.envy.dotenv.services.PresentationModeState
 class DotEnvPresentationModeListener : UISettingsListener {
 
     override fun uiSettingsChanged(uiSettings: UISettings) {
+        if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.presentationMode) return
         val inPresentationMode = uiSettings.presentationMode
         ApplicationManager.getApplication().invokeLater {
             for (project in ProjectManager.getInstance().openProjects) {

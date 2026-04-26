@@ -6,6 +6,7 @@
     <vendor email="hoteira@proton.me" url="https://github.com/Hoteira">Hoteira</vendor>
 
     <depends>com.intellij.modules.lang</depends>
+    <depends>org.jetbrains.plugins.terminal</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <fileType
@@ -71,6 +72,21 @@
                 language="any"
                 implementationClass="com.envy.dotenv.completion.EnvVarCompletionContributor"/>
 
+        <postStartupActivity
+                implementation="com.envy.dotenv.terminal.TerminalSecretCensorInitializer"/>
+
+        <consoleInputFilterProvider
+                implementation="com.envy.dotenv.terminal.ConsoleSecretRedactionProvider"/>
+
+        <editorNotificationProvider
+                implementation="com.envy.dotenv.settings.EnvSettingsEditorNotification"/>
+
+        <editorNotificationProvider
+                implementation="com.envy.dotenv.sops.SopsEditorNotification"/>
+
+        <fileEditorProvider
+                implementation="com.envy.dotenv.sops.SopsSplitEditorProvider"/>
+
     </extensions>
 
     <applicationListeners>
@@ -80,8 +96,18 @@
 
     <product-descriptor
             code="PENVY"
-            release-date="20260422"
-            release-version="25"
+            release-date="20260426"
+            release-version="30"
             optional="true"/>
+
+    <actions>
+        <action id="EnvY.ToggleTerminalSecrets"
+                class="com.envy.dotenv.terminal.ToggleTerminalSecretsAction"
+                text="Toggle Terminal Secrets Visibility"
+                description="Reveals or hides censored secrets in the terminal">
+            <keyboard-shortcut first-keystroke="ctrl alt shift X" keymap="$default"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
 
 </idea-plugin>

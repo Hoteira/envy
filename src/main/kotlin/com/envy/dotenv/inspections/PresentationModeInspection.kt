@@ -26,6 +26,7 @@ class PresentationModeInspection : LocalInspectionTool() {
         return object : PsiElementVisitor() {
             override fun visitFile(file: PsiFile) {
                 if (file !is DotEnvFile) return
+                if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.presentationMode) return
                 if (!UISettings.getInstance().presentationMode) return
 
                 for (child in file.node.getChildren(null)) {
@@ -81,7 +82,7 @@ class RevealSecretFix(private val key: String, private val valueOffset: Int) : L
         for (editor in editors) {
             editor.foldingModel.runBatchFoldingOperation {
                 editor.foldingModel.allFoldRegions
-                    .filter { it.placeholderText == "***" && valueOffset in it.startOffset..it.endOffset }
+                    .filter { it.placeholderText == "***" && valueOffset in it.startOffset until it.endOffset }
                     .forEach {
                         it.isExpanded = true
                         if (!marked) {

@@ -30,12 +30,16 @@ EnvY brings first-class `.env` file support to all JetBrains IDEs. Syntax highli
 | Secret values hidden in presentation mode |  ✓   | ✓ |
 | Quick-fix: reveal hidden key / reveal all |  ✓   | ✓ |
 | Env var autocomplete in code |  ✓   | ✓ |
+| Terminal secret censoring |  ✓   | ✓ |
+| Toggle secret visibility (Ctrl+Alt+Shift+X) |  ✓   | ✓ |
+| Run/Debug console secret redaction |      | ✓ |
 | Secret leak detection |      | ✓ |
 | Gitignore verification for secrets |      | ✓ |
 | Quick-fix: add to `.gitignore` |      | ✓ |
 | Quick-fix: replace secret with placeholder |      | ✓ |
 | Sensitive key name detection |      | ✓ |
 | Inline ghost completion (Tab to accept) |      | ✓ |
+| SOPS encrypted .env file support |      | ✓ |
 
 Works with IntelliJ IDEA, WebStorm, PyCharm, CLion, RustRover, GoLand, PhpStorm, and Rider.
 <!-- Plugin description end -->
@@ -109,10 +113,24 @@ When EnvY detects a **duplicate key** or an **exposed secret** <img src="https:/
 * Press `Alt+Enter` (Windows/Linux) or `⌥+Enter` (macOS) to open the context menu.
 * Select the desired action (e.g., **"Add to .gitignore"** or **"Replace secret with placeholder"**).
 
+### Terminal Secret Censor <img src="https://img.shields.io/badge/FREE-44cc11.svg?style=flat" height="22" align="absmiddle">
+EnvY automatically censors detected secrets in your terminal output so they are never printed in plaintext.
+* If you need to momentarily view the hidden secrets in the terminal, press `Ctrl+Alt+Shift+X` (or `Cmd+Option+Shift+X` on macOS) to instantly toggle them revealed or hidden.
+
+### Run/Debug Console Secret Redaction <img src="https://img.shields.io/badge/FREE-44cc11.svg?style=flat" height="22" align="absmiddle">
+Automatically redacts secrets from application logs, crash reports, and stack traces in the IDE's Run/Debug console. Secrets are replaced with `***` before they render on screen, so they never appear in plaintext.
+
 ### Ghost Text Autocomplete <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
 Start typing your environment variable accessor (like `process.env.` in JavaScript or `os.getenv()` in Python).
 EnvY will automatically suggest variables from your `.env` files using inline gray text.
 * Press `Tab` to accept the suggestion.
+
+### SOPS Encrypted File Support <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
+Seamlessly edit SOPS-encrypted `.env` files. EnvY detects the SOPS metadata, decrypts in-memory using the `sops` CLI, and shows a split editor with raw ciphertext on the left and editable plaintext on the right. Saves automatically re-encrypt. Decrypted content never touches disk and is never indexed by the IDE.
+
+Includes seamless support for complex SOPS metadata configurations including AWS profiles, IAM assumed roles, and KMS ARNs.
+
+Requires the [sops CLI](https://github.com/getsops/sops#install) to be installed.
 
 ### Presentation Mode
 EnvY automatically folds sensitive values (turning them into `***`) the moment you enter IntelliJ's native Presentation Mode (`View` → `Appearance` → `Enter Presentation Mode`).

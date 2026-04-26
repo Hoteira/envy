@@ -26,8 +26,8 @@ class AddToGitignoreFix(private val fileName: String) : com.intellij.codeInspect
                     .getDocument(com.intellij.psi.PsiManager.getInstance(project).findFile(gitignore) ?: return@runWriteCommandAction)
                     ?: return@runWriteCommandAction
 
-                val currentText = doc.text
-                val newLine = if (currentText.endsWith("\n")) "" else "\n"
+                val chars = doc.charsSequence
+                val newLine = if (chars.isNotEmpty() && chars[chars.length - 1] == '\n') "" else "\n"
                 doc.insertString(doc.textLength, "$newLine$fileName\n")
                 com.intellij.psi.PsiDocumentManager.getInstance(project).commitDocument(doc)
             } else {
@@ -44,20 +44,19 @@ class SecretLeakInspection : LocalInspectionTool() {
     companion object {
         private val secretPatterns = listOf(
             SecretPattern("AWS Access Key", Regex("AKIA[0-9A-Z]{16}")),
-            SecretPattern("Stripe Secret Key", Regex("sk_(live|test)_[0-9a-zA-Z]{24,}")),
-            SecretPattern("Stripe Restricted Key", Regex("rk_(live|test)_[0-9a-zA-Z]{24,}")),
+            SecretPattern("Stripe Secret Key", Regex("sk_(live|test)_[0-9a-zA-Z]{16,}")),
+            SecretPattern("Stripe Restricted Key", Regex("rk_(live|test)_[0-9a-zA-Z]{16,}")),
             SecretPattern("GitHub Token", Regex("gh[pousr]_[A-Za-z0-9_]{36,}")),
-            SecretPattern("OpenAI API Key", Regex("sk-[a-zA-Z0-9-_]{20,}")),
-            SecretPattern("SendGrid API Key", Regex("SG\\.[a-zA-Z0-9_-]{22}\\.[a-zA-Z0-9_-]{43}")),
+            SecretPattern("OpenAI API Key", Regex("sk-[a-zA-Z0-9_\\-]{20,}")),
+            SecretPattern("SendGrid API Key", Regex("SG\\.[a-zA-Z0-9_-]{6,}\\.[a-zA-Z0-9_-]{20,}")),
             SecretPattern("Slack Token", Regex("xox[baprs]-[0-9a-zA-Z-]{10,}")),
             SecretPattern("JSON Web Token", Regex("eyJ[A-Za-z0-9-_]+\\.eyJ[A-Za-z0-9-_]+\\.[A-Za-z0-9-_]+")),
             SecretPattern("Private Key", Regex("-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----")),
         )
 
         private val sensitiveKeyWords = listOf(
-            "SECRET", "PASSWORD", "PASSWD", "PWD", "TOKEN", "API_KEY", "APIKEY",
-            "PRIVATE_KEY", "CREDENTIAL", "AUTH", "ACCESS_KEY", "CLIENT_SECRET",
-            "ENCRYPTION_KEY", "SIGNING_KEY", "DATABASE_URL", "KEY"
+            "SECRET", "PASSWORD", "PASSWD", "PWD", "PSW", "TOKEN",
+            "CREDENTIAL", "AUTH", "KEY"
         )
 
         private val placeholderValues = setOf(
@@ -108,12 +107,16 @@ class SecretLeakInspection : LocalInspectionTool() {
             override fun visitFile(file: PsiFile) {
                 if (file !is DotEnvFile) return
                 if (!LicenseChecker.isPaidFeatureAvailable()) return
+                val settings = com.envy.dotenv.settings.EnvySettings.getInstance().state
+                if (!settings.secretLeakDetection) return
 
                 val vFile = file.virtualFile ?: return
                 val fileName = vFile.name
 
-                val isCommittedFile = fileName in committedFileNames
                 val isGitignored = isFileGitignored(vFile, file.project)
+                if (isGitignored) return
+
+                val isCommittedFile = fileName in committedFileNames
 
                 val entries = PsiEnvExtractor.extractEntries(file)
 
@@ -147,8 +150,8 @@ class SecretLeakInspection : LocalInspectionTool() {
                     }
                 }
 
-                // Warn on each secret if file is not gitignored
-                if (!isGitignored && !isCommittedFile) {
+                // Warn on each secret if file is not committed
+                if (!isCommittedFile && settings.secretLeakDetection) {
                     for ((entry, patternName) in secretEntries) {
                         holder.registerProblem(
                             entry.keyNode.psi,
