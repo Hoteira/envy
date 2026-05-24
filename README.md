@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="src/main/resources/META-INF/pluginIcon.svg" alt="EnvY Logo" width="120" height="120">
+  <img src="" alt="EnvY Logo" width="120" height="120">
 
 # EnvY
 
