@@ -1,9 +1,9 @@
 <div align="center">
-  <br>
   <img src="src/main/resources/META-INF/pluginIcon.svg" alt="EnvY Logo" width="120" height="120">
 
+# EnvY
 
-**Smart `.env` file manager for JetBrains IDEs**
+**Smart .env file manager for JetBrains IDEs**
 
 [![JetBrains](https://img.shields.io/badge/JetBrains-Marketplace-000000.svg?style=flat-square&logo=jetbrains)](https://plugins.jetbrains.com/plugin/31217-envy/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF.svg?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
@@ -15,35 +15,11 @@
 
 <br>
 
-<!-- Plugin description -->
-EnvY brings first-class `.env` file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, secret leak protection, a cross-environment diff tool to spot mismatches between environments, and automatic secret folding in presentation mode.
+## Overview
 
-## Free vs Pro
-
-| Feature | Free | Pro |
-|---|:----:|:---:|
-| Syntax highlighting for `.env` files |  ✓   | ✓ |
-| Duplicate key detection + quick-fix |  ✓   | ✓ |
-| Cross-environment diff tool window |  ✓   | ✓ |
-| Recursive `.env` file discovery |  ✓   | ✓ |
-| `.envrc` (direnv) file support |  ✓   | ✓ |
-| Secret values hidden in presentation mode |  ✓   | ✓ |
-| Quick-fix: reveal hidden key / reveal all |  ✓   | ✓ |
-| Env var autocomplete in code |  ✓   | ✓ |
-| Terminal secret censoring |      | ✓ |
-| Toggle secret visibility (Ctrl+Alt+Shift+X) |      | ✓ |
-| Clipboard redaction on copy |      | ✓ |
-| Run/Debug console secret redaction |      | ✓ |
-| Secret leak detection |      | ✓ |
-| Gitignore verification for secrets |      | ✓ |
-| Quick-fix: add to `.gitignore` |      | ✓ |
-| Quick-fix: replace secret with placeholder |      | ✓ |
-| Sensitive key name detection |      | ✓ |
-| Inline ghost completion (Tab to accept) |      | ✓ |
-| SOPS encrypted .env file support |      | ✓ |
+EnvY brings first-class .env file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, secret leak protection, a cross-environment diff tool to spot mismatches between environments, and automatic secret folding in presentation mode.
 
 Works with IntelliJ IDEA, WebStorm, PyCharm, CLion, RustRover, GoLand, PhpStorm, and Rider.
-<!-- Plugin description end -->
 
 <div align="left" style="padding-left: 16px;">
   <a href="https://plugins.jetbrains.com/plugin/31217-envy/pricing">
@@ -58,115 +34,62 @@ Works with IntelliJ IDEA, WebStorm, PyCharm, CLion, RustRover, GoLand, PhpStorm,
 ## Features
 
 ### Syntax Highlighting
-
-Full syntax highlighting for `.env` files — keys, values, comments, quoted strings, and `export` prefixes are all visually distinct. Follows your IDE color scheme automatically.
-
-**Supports any `.env.*` variant.**
+Full syntax highlighting for .env files — keys, values, comments, quoted strings, and export prefixes are all visually distinct. Follows your IDE color scheme automatically.
 
 ### Duplicate Key Detection
-
 Flags duplicate keys with inline warnings. When the same variable appears twice, only the last value takes effect — EnvY catches this before it causes issues in production.
 
 ### Cross-Environment Diff
-
-A dedicated tool window for comparing environment files side by side. Select any two `.env` files and instantly see:
-
-- **Missing variables** — keys that exist in one file but not the other
-- **Value mismatches** — same key, different values across environments
-- **Matching entries** — confirmation that configs are synced
+A dedicated tool window for comparing environment files side by side. Select any two .env files and instantly see missing variables, value mismatches, and matching entries.
 
 ### Secret Leak Protection <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
-
-Detects hardcoded secrets — AWS keys, Stripe keys, GitHub tokens, JWTs, and more — with regex pattern matching and key name heuristics. Warns when `.env` files containing secrets are not gitignored, with one-click quick-fixes to add them to `.gitignore` or replace values with placeholders.
+Detects hardcoded secrets — AWS keys, Stripe keys, GitHub tokens, JWTs, and more — with regex pattern matching and key name heuristics. Warns when .env files containing secrets are not gitignored.
 
 ### Presentation Mode
-
-Secret values automatically fold to `***` when presentation mode is enabled. No configuration needed — EnvY detects sensitive keys and hides their values. Use the quick-fix gutter actions to reveal individual keys or all values at once.
+Secret values automatically fold to *** when presentation mode is enabled. Use the quick-fix gutter actions to reveal individual keys or all values at once.
 
 ### .envrc / direnv Support
-
-Full support for `.envrc` files used by direnv. Environment variables defined with `export` are parsed and included automatically.
+Full support for .envrc files used by direnv. Environment variables defined with export are parsed and included automatically.
 
 ### Env Var Autocomplete 
-
-Context-aware autocomplete for environment variable access patterns across 10+ languages — JavaScript, Python, Rust, PHP, Ruby, Go, Java, Kotlin, C#, and more. Includes **low-latency inline ghost completion** (Tab to accept) powered by an asynchronous caching engine.
+Context-aware autocomplete for environment variable access patterns across 10+ languages including low-latency inline ghost completion (Tab to accept).
 
 ### Terminal Secret Censor <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
+Hides values from your .env files in the integrated terminal as soon as they appear in output. Censoring is incremental and chunk-aware.
 
-Hides values from your `.env` files in the integrated terminal as soon as they appear in output — `printenv`, `aws sts get-caller-identity`, `docker run` echoes, anything. Censoring is incremental and chunk-aware so split PTY frames still match, and the renderer paints `***` over the underlying text without mutating the document.
-
-**Clipboard-safe by design.** Copying a selection that overlaps a censored span puts `***` on the clipboard instead of the secret, so accidental Ctrl+C → paste-into-Slack moments don't leak credentials. Press `Ctrl+Alt+Shift+X` (or `⌘+⌥+Shift+X` on macOS) to toggle reveal/hide across every open terminal at once.
-
-### Run/Debug Console Secret Redaction <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
-
-Redacts secrets from Run/Debug console output before it renders — application logs, crash dumps, stack traces, and exception messages. Plaintext secrets never reach the IDE's console buffer, so they can't be scrolled back to or copied out later.
+### Clipboard Redaction <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
+Copying a selection that overlaps a censored span puts *** on the clipboard instead of the secret.
 
 ### SOPS Encrypted File Support <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
+Seamlessly edit SOPS-encrypted .env files with in-memory decryption/re-encryption. Plaintext never touches disk.
 
-First-class editing of [SOPS](https://github.com/getsops/sops)-encrypted `.env` files via a split editor: raw ciphertext on the left, editable plaintext on the right. Decryption and re-encryption happen entirely in-memory — plaintext never touches disk and is never seen by the IDE indexer. Saves transparently re-encrypt with the original recipients pulled from the file's SOPS metadata.
+## Free vs Pro
 
-Supports complex key-management setups out of the box: AWS profiles, IAM assumed roles, KMS ARNs, and age/PGP recipients. Requires the [`sops` CLI](https://github.com/getsops/sops#install) on `PATH`.
+| Feature | Free | Pro |
+|---|:----:|:---:|
+| Syntax highlighting for .env files |  ✓   | ✓ |
+| Duplicate key detection + quick-fix |  ✓   | ✓ |
+| Cross-environment diff tool window |  ✓   | ✓ |
+| Recursive .env file discovery |  ✓   | ✓ |
+| .envrc (direnv) file support |  ✓   | ✓ |
+| Secret values hidden in presentation mode |  ✓   | ✓ |
+| Quick-fix: reveal hidden key / reveal all |  ✓   | ✓ |
+| Env var autocomplete in code |  ✓   | ✓ |
+| Terminal secret censoring |      | ✓ |
+| Toggle secret visibility (Ctrl+Alt+Shift+X) |      | ✓ |
+| Clipboard redaction on copy |      | ✓ |
+| Run/Debug console secret redaction |      | ✓ |
+| Secret leak detection |      | ✓ |
+| Gitignore verification for secrets |      | ✓ |
+| Sensitive key name detection |      | ✓ |
+| Inline ghost completion (Tab to accept) |      | ✓ |
+| SOPS encrypted .env file support |      | ✓ |
 
 ## Installation
 
 **From JetBrains Marketplace:**
-
 `Settings` → `Plugins` → `Marketplace` → Search for **"EnvY"** → `Install`
-
----
-
-## Usage Guide
-
-EnvY works out of the box with zero configuration required, but here is how you can get the most out of its features:
-
-### Cross-Environment Diff Tool
-1. Look for the **"Env Diff"** tool window tab at the bottom - left of your IDE.
-2. Click to open it, and use the dropdowns to select any two `.env` files in your project (e.g., `.env.development` and `.env.production`).
-3. The panel will instantly populate with missing keys and value mismatches.
-
-### Quick-Fixes (Secret Leaks & Duplicates)
-When EnvY detects a **duplicate key** or an **exposed secret** <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">, it will highlight the line.
-* Place your cursor on the highlighted text.
-* Press `Alt+Enter` (Windows/Linux) or `⌥+Enter` (macOS) to open the context menu.
-* Select the desired action (e.g., **"Add to .gitignore"** or **"Replace secret with placeholder"**).
-
-### Terminal Secret Censor <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
-EnvY automatically censors detected secrets in your terminal output so they are never printed in plaintext. Copying a censored selection puts `***` on the clipboard in place of the secret, so the underlying value never leaks via paste.
-* If you need to momentarily view the hidden secrets in the terminal, press `Ctrl+Alt+Shift+X` (or `Cmd+Option+Shift+X` on macOS) to instantly toggle them revealed or hidden.
-
-### Run/Debug Console Secret Redaction <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
-Automatically redacts secrets from application logs, crash reports, and stack traces in the IDE's Run/Debug console. Secrets are replaced with `***` before they render on screen, so they never appear in plaintext.
-
-### Ghost Text Autocomplete <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
-Start typing your environment variable accessor (like `process.env.` in JavaScript or `os.getenv()` in Python).
-EnvY will automatically suggest variables from your `.env` files using inline gray text.
-* Press `Tab` to accept the suggestion.
-
-### SOPS Encrypted File Support <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
-Seamlessly edit SOPS-encrypted `.env` files. EnvY detects the SOPS metadata, decrypts in-memory using the `sops` CLI, and shows a split editor with raw ciphertext on the left and editable plaintext on the right. Saves automatically re-encrypt. Decrypted content never touches disk and is never indexed by the IDE.
-
-Includes seamless support for complex SOPS metadata configurations including AWS profiles, IAM assumed roles, and KMS ARNs.
-
-Requires the [sops CLI](https://github.com/getsops/sops#install) to be installed.
-
-### Presentation Mode
-EnvY automatically folds sensitive values (turning them into `***`) the moment you enter IntelliJ's native Presentation Mode (`View` → `Appearance` → `Enter Presentation Mode`).
-* To temporarily reveal a specific folded secret, **left-click** the on the `***`, or press `Alt+Enter` to use the **Reveal** quick-fix.
-
----
-
-## Troubleshooting & FAQ
-
-**I purchased a Pro trial, but the features aren't unlocking?**
-Because EnvY integrates deeply with the JetBrains licensing API, **you must restart your IDE** after starting a trial or purchasing a license for the Pro features (like Ghost Completion and Secret Detection) to fully activate.
-
-**How do I report a bug or request a feature?**
-Please open an issue on our [GitHub Issue Tracker](https://github.com/Hoteira/envy/issues).
-
----
 
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE).
-
-
+This project is licensed under the Apache 2.0 License - see the [LICENSE](LICENSE) file for details.
