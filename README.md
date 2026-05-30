@@ -17,9 +17,11 @@
 
 ## Overview
 
-EnvY brings first-class .env file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, secret leak protection, a cross-environment diff tool to spot mismatches between environments, and automatic secret folding in presentation mode.
+<!-- Plugin description -->
+EnvY brings first-class .env file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, secret leak detection, a cross-environment diff tool to spot mismatches between environments, and automatic secret folding in presentation mode.
 
 Works with IntelliJ IDEA, WebStorm, PyCharm, CLion, RustRover, GoLand, PhpStorm, and Rider.
+<!-- Plugin description end -->
 
 <div align="left" style="padding-left: 16px;">
   <a href="https://plugins.jetbrains.com/plugin/31217-envy/pricing">

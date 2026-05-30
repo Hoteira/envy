@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.1.0]
+
+### Free vs Pro
+- Secret leak detection, gitignore verification, and sensitive key-name detection are now **free** for everyone. Active protection — terminal/console/clipboard secret censoring, SOPS, and inline ghost completion — remains Pro.
+
+### Secret Leak Detection
+- Reduced false positives: keys that configure a credential rather than hold one (e.g. `*_ENABLED`, `*_TTL`, `*_TIMEOUT`, `*_TYPE`, `*_ALGORITHM`, `*_PATH`, `*_FILE`) and non-secret value shapes (booleans, plain numbers, durations like `30s`) are no longer flagged. High-confidence pattern matches are unaffected.
+
+### Notifications
+- Added an optional, dismissible "leave a review" prompt, shown at most once after EnvY has caught a real issue.
+- Added a Pro upgrade prompt shown later for unlicensed users only — capped, on a cooldown, and permanently silenceable. Neither prompt blocks the editor, and both can be muted in Settings | Notifications.
+
+### Docs
+- Corrected an inaccurate heap-dump safety claim in the 3.0.0 notes.
+
 ## [3.0.0]
 
 ### SOPS Integration
