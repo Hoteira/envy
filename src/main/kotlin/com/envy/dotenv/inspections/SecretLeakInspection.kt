@@ -6,7 +6,6 @@ import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.psi.PsiElementVisitor
 import com.intellij.psi.PsiFile
 import com.envy.dotenv.language.psi.DotEnvFile
-import com.envy.dotenv.licensing.LicenseChecker
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.project.guessProjectDir
@@ -64,6 +63,30 @@ class SecretLeakInspection : LocalInspectionTool() {
             "replace_me", "placeholder", "null", "none", "undefined"
         )
 
+        // Values that name a state/number rather than carry a credential. These commonly appear
+        // under sensitive-looking keys (AUTH_ENABLED=true, TOKEN_TTL=3600) and are not secrets.
+        private val nonSecretValues = setOf(
+            "true", "false", "yes", "no", "on", "off", "enabled", "disabled", "nil"
+        )
+        private val durationRegex = Regex("^\\d+(ms|s|m|h|d)$", RegexOption.IGNORE_CASE)
+
+        // Key fragments that describe configuration *about* a credential rather than the
+        // credential value itself (e.g. JWT_ALGORITHM, SESSION_TIMEOUT, KEY_FILE).
+        private val configKeyMarkers = listOf(
+            "_ENABLED", "_DISABLED", "_REQUIRED", "_TTL", "_TIMEOUT", "_EXPIRY", "_EXPIRES",
+            "_EXPIRATION", "_TYPE", "_ALGORITHM", "_ALGO", "_LENGTH", "_SIZE", "_HEADER",
+            "_PROVIDER", "_STRATEGY", "_ROTATION", "_POLICY", "_FORMAT", "_VERSION",
+            "_PATH", "_FILE", "_URL", "_URI", "_NAME"
+        )
+
+        private fun looksLikeNonSecretValue(value: String): Boolean {
+            val v = value.trim()
+            if (v.lowercase() in nonSecretValues) return true
+            if (v.isNotEmpty() && v.all { it.isDigit() }) return true   // counts, ports, ttls
+            if (durationRegex.matches(v)) return true                   // 30s, 1h, 500ms
+            return false
+        }
+
         fun getSecretPatternName(value: String): String? {
             if (value.isEmpty()) return null
             return secretPatterns.find { it.regex.containsMatchIn(value) }?.name
@@ -74,18 +97,33 @@ class SecretLeakInspection : LocalInspectionTool() {
             return computeIsSecret(key, value)
         }
 
+        /**
+         * Cheap, allocation-light check used to decide whether an upgrade prompt is relevant
+         * for the file in front of the user. Pattern-only (no key heuristics) so it stays fast
+         * over raw document text and never produces editor warnings on its own.
+         */
+        fun textContainsSecret(text: String): Boolean {
+            if (text.isEmpty()) return false
+            return secretPatterns.any { it.regex.containsMatchIn(text) }
+        }
+
         private fun computeIsSecret(key: String, value: String): Boolean {
+            // High-confidence pattern match always wins, regardless of the key name.
             if (getSecretPatternName(value) != null) return true
 
             val upperKey = key.uppercase()
             val isSensitiveKey = sensitiveKeyWords.any { upperKey.contains(it) }
             if (!isSensitiveKey) return false
 
+            // The key mentions a credential but is clearly a setting about one, not the value.
+            if (configKeyMarkers.any { upperKey.contains(it) }) return false
+
             val lowerValue = value.lowercase().trim()
             if (lowerValue in placeholderValues) return false
             if (lowerValue.startsWith("your_") && lowerValue.endsWith("_here")) return false
+            if (looksLikeNonSecretValue(value)) return false
 
-            return value.length >= 4
+            return value.length >= 6
         }
     }
 
@@ -106,7 +144,6 @@ class SecretLeakInspection : LocalInspectionTool() {
         return object : PsiElementVisitor() {
             override fun visitFile(file: PsiFile) {
                 if (file !is DotEnvFile) return
-                if (!LicenseChecker.isPaidFeatureAvailable()) return
                 val settings = com.envy.dotenv.settings.EnvySettings.getInstance().state
                 if (!settings.secretLeakDetection) return
 
@@ -148,6 +185,10 @@ class SecretLeakInspection : LocalInspectionTool() {
                             )
                         }
                     }
+                }
+
+                if (secretEntries.isNotEmpty()) {
+                    com.envy.dotenv.engagement.EngagementTracker.getInstance().onIssueCaught()
                 }
 
                 // Warn on each secret if file is not committed

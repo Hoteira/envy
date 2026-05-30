@@ -9,6 +9,9 @@
     <depends>org.jetbrains.plugins.terminal</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="EnvY" displayType="BALLOON"/>
+        <notificationGroup id="EnvY Suggestions" displayType="BALLOON"/>
+
         <fileType
                 name="DotEnv"
                 language="DotEnv"

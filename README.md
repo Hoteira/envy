@@ -42,8 +42,8 @@ Flags duplicate keys with inline warnings. When the same variable appears twice,
 ### Cross-Environment Diff
 A dedicated tool window for comparing environment files side by side. Select any two .env files and instantly see missing variables, value mismatches, and matching entries.
 
-### Secret Leak Protection <img src="https://img.shields.io/badge/PRO-087CFA.svg?style=flat" height="22" align="absmiddle">
-Detects hardcoded secrets — AWS keys, Stripe keys, GitHub tokens, JWTs, and more — with regex pattern matching and key name heuristics. Warns when .env files containing secrets are not gitignored.
+### Secret Leak Detection
+Detects hardcoded secrets — AWS keys, Stripe keys, GitHub tokens, JWTs, and more — with regex pattern matching and key name heuristics. Warns when .env files containing secrets are not gitignored, with a quick-fix to add them.
 
 ### Presentation Mode
 Secret values automatically fold to *** when presentation mode is enabled. Use the quick-fix gutter actions to reveal individual keys or all values at once.
@@ -75,13 +75,13 @@ Seamlessly edit SOPS-encrypted .env files with in-memory decryption/re-encryptio
 | Secret values hidden in presentation mode |  ✓   | ✓ |
 | Quick-fix: reveal hidden key / reveal all |  ✓   | ✓ |
 | Env var autocomplete in code |  ✓   | ✓ |
+| Secret leak detection |  ✓   | ✓ |
+| Gitignore verification for secrets |  ✓   | ✓ |
+| Sensitive key name detection |  ✓   | ✓ |
 | Terminal secret censoring |      | ✓ |
 | Toggle secret visibility (Ctrl+Alt+Shift+X) |      | ✓ |
 | Clipboard redaction on copy |      | ✓ |
 | Run/Debug console secret redaction |      | ✓ |
-| Secret leak detection |      | ✓ |
-| Gitignore verification for secrets |      | ✓ |
-| Sensitive key name detection |      | ✓ |
 | Inline ghost completion (Tab to accept) |      | ✓ |
 | SOPS encrypted .env file support |      | ✓ |
 

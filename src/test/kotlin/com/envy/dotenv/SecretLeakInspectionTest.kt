@@ -128,4 +128,30 @@ class SecretLeakInspectionTest {
         assertFalse(SecretLeakInspection.isSecret("API_KEY", "CHANGEME"))
         assertFalse(SecretLeakInspection.isSecret("API_KEY", "Placeholder"))
     }
+
+    // Reduced false positives: settings *about* a credential are not the credential.
+
+    @Test
+    fun testConfigKeysAreNotSecrets() {
+        assertFalse(SecretLeakInspection.isSecret("AUTH_ENABLED", "true"))
+        assertFalse(SecretLeakInspection.isSecret("TOKEN_TTL", "3600"))
+        assertFalse(SecretLeakInspection.isSecret("SESSION_TIMEOUT", "30"))
+        assertFalse(SecretLeakInspection.isSecret("JWT_ALGORITHM", "RS256"))
+        assertFalse(SecretLeakInspection.isSecret("KEY_FILE", "/etc/ssl/key.pem"))
+        assertFalse(SecretLeakInspection.isSecret("SECRET_NAME", "prod-db-secret"))
+    }
+
+    @Test
+    fun testNonSecretValueShapesIgnored() {
+        assertFalse(SecretLeakInspection.isSecret("API_KEY", "true"))
+        assertFalse(SecretLeakInspection.isSecret("PASSWORD", "12345678"))
+        assertFalse(SecretLeakInspection.isSecret("TOKEN", "500ms"))
+    }
+
+    @Test
+    fun testRealSecretsUnderConfigKeysStillCaughtByPattern() {
+        // A genuine key value under an otherwise config-looking key is still flagged via pattern.
+        assertTrue(SecretLeakInspection.isSecret("KEY_FILE", "AKIA1234567890ABCDEF"))
+        assertTrue(SecretLeakInspection.isSecret("TOKEN_TYPE", "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij"))
+    }
 }

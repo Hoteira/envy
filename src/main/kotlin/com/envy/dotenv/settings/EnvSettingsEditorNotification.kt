@@ -30,6 +30,8 @@ class EnvSettingsEditorNotification : EditorNotificationProvider, DumbAware {
     ): Function<in FileEditor, out JComponent?>? {
         if (file.fileType != DotEnvFileType) return null
 
+        com.envy.dotenv.engagement.EngagementTracker.getInstance().onEnvFileShown(project, file)
+
         return Function { _ ->
             val icon = JLabel(ICON)
             icon.toolTipText = "EnvY Settings"
