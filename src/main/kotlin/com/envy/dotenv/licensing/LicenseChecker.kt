@@ -106,6 +106,18 @@ object LicenseChecker {
         return if (hasCheckedOnce) cachedAvailable else true
     }
 
+    /**
+     * Whether the license state has been resolved at least once. Callers that must never
+     * misfire against a paying user (e.g. upgrade prompts) should gate on this so they stay
+     * silent until the real license status is known.
+     */
+    fun isLicenseDetermined(): Boolean {
+        if (!hasCheckedOnce && System.currentTimeMillis() >= nextCheckTime) {
+            triggerCheck()
+        }
+        return hasCheckedOnce
+    }
+
     fun isPaidFeatureAvailableStrict(): Boolean {
         //if (System.getProperty("envy.dev.pro") == "true") return true
         val now = System.currentTimeMillis()

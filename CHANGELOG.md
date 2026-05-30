@@ -23,7 +23,7 @@ To support the ongoing development of security features like our new SOPS integr
 
 ### Secret Leak Inspection
 - Unified Gitignore verification with secret scanning.
-- Removed static caches to eliminate memory bloat and prevent plaintext secrets from leaking into JVM heap dumps.
+- Removed redundant static caches to reduce memory footprint and avoid keeping duplicate copies of parsed values across components.
 
 ### Env File Service
 - Implemented CachedValuesManager and debounced keystrokes to eliminate GC churn and keep typing buttery smooth.

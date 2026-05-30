@@ -35,6 +35,7 @@ class DuplicateKeyInspection : LocalInspectionTool() {
                             ProblemHighlightType.WARNING,
                             RemoveDuplicateFix(entry.key)
                         )
+                        com.envy.dotenv.engagement.EngagementTracker.getInstance().onIssueCaught()
                     } else {
                         seen[entry.key] = lineNum
                     }
