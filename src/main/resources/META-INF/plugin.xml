@@ -100,7 +100,7 @@
     <product-descriptor
             code="PENVY"
             release-date="20260720"
-            release-version="31"
+            release-version="32"
             optional="true"/>
 
     <actions>
