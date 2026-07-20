@@ -13,8 +13,8 @@
         <notificationGroup id="EnvY Suggestions" displayType="BALLOON"/>
 
         <fileType
-                name="DotEnv"
-                language="DotEnv"
+                name="EnvY DotEnv"
+                language="EnvY-DotEnv"
                 implementationClass="com.envy.dotenv.language.DotEnvFileType"
                 fieldName="INSTANCE"
                 fileNames=".env;.envrc"
@@ -27,15 +27,15 @@
                 factoryClass="com.envy.dotenv.toolWindow.EnvDiffToolWindowFactory"/>
 
         <lang.parserDefinition
-                language="DotEnv"
+                language="EnvY-DotEnv"
                 implementationClass="com.envy.dotenv.language.DotEnvParserDefinition"/>
 
         <lang.syntaxHighlighterFactory
-                language="DotEnv"
+                language="EnvY-DotEnv"
                 implementationClass="com.envy.dotenv.language.DotEnvSyntaxHighlighterFactory"/>
 
         <localInspection
-                language="DotEnv"
+                language="EnvY-DotEnv"
                 displayName="Duplicate key in .env file"
                 groupName="DotEnv"
                 shortName="DotEnvDuplicateKey"
@@ -44,7 +44,7 @@
                 implementationClass="com.envy.dotenv.inspections.DuplicateKeyInspection"/>
 
         <localInspection
-                language="DotEnv"
+                language="EnvY-DotEnv"
                 displayName="Possible secret or credential in .env file"
                 groupName="DotEnv"
                 shortName="DotEnvSecretLeak"
@@ -53,11 +53,11 @@
                 implementationClass="com.envy.dotenv.inspections.SecretLeakInspection"/>
 
         <lang.foldingBuilder
-                language="DotEnv"
+                language="EnvY-DotEnv"
                 implementationClass="com.envy.dotenv.language.DotEnvFoldingBuilder"/>
 
         <localInspection
-                language="DotEnv"
+                language="EnvY-DotEnv"
                 displayName="Secret value hidden in presentation mode"
                 groupName="DotEnv"
                 shortName="DotEnvPresentationMode"
@@ -99,7 +99,7 @@
 
     <product-descriptor
             code="PENVY"
-            release-date="20260530"
+            release-date="20260720"
             release-version="31"
             optional="true"/>
 
