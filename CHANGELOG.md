@@ -1,6 +1,6 @@
 # Changelog
 
-## [3.1.1]
+## [3.2.0]
 
 ### Fixed
 - Resolved a fatal startup conflict when EnvY is installed alongside the "ru.adelf.idea.dotenv" (.env files) plugin. EnvY previously registered the generic `DotEnv` language ID and file type name — both global keys already used by that plugin — which raised repeated `ImplementationConflictException` errors and left the IDE unusable. EnvY now uses unique `EnvY-DotEnv` identifiers so both plugins can be installed together.
