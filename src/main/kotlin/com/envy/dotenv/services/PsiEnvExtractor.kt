@@ -27,28 +27,27 @@ object PsiEnvExtractor {
         return entries
     }
 
+    /**
+     * Same rules as EnvParser.parse: the first word is the key, a separator must follow it, and the
+     * first value after the separator is the value. Lines like direnv's "layout python3" (two words,
+     * no separator) are not entries.
+     */
     private fun extractEntry(entryNode: ASTNode): PsiEnvEntry? {
         var keyNode: ASTNode? = null
         var valueNode: ASTNode? = null
+        var sawSeparator = false
         var node = entryNode.firstChildNode
         while (node != null) {
             when (node.elementType) {
-                DotEnvTypes.KEY -> keyNode = node
-                DotEnvTypes.VALUE, DotEnvTypes.QUOTED_VALUE -> valueNode = node
+                DotEnvTypes.KEY -> if (keyNode == null && !sawSeparator) keyNode = node else if (!sawSeparator) return null
+                DotEnvTypes.SEPARATOR -> if (keyNode != null) sawSeparator = true
+                DotEnvTypes.VALUE, DotEnvTypes.QUOTED_VALUE -> if (sawSeparator && valueNode == null) valueNode = node
             }
             node = node.treeNext
         }
         val kNode = keyNode ?: return null
-        val rawValue = (valueNode?.text ?: "").trim()
-        val value = when {
-            rawValue.length >= 2 && rawValue.startsWith('"') && rawValue.endsWith('"') ->
-                EnvParser.processEscapes(rawValue.substring(1, rawValue.length - 1))
-            rawValue.length >= 2 && rawValue.startsWith('\'') && rawValue.endsWith('\'') ->
-                rawValue.substring(1, rawValue.length - 1)
-            rawValue.length >= 2 && rawValue.startsWith('`') && rawValue.endsWith('`') ->
-                rawValue.substring(1, rawValue.length - 1)
-            else -> rawValue
-        }
+        if (!sawSeparator) return null
+        val value = EnvParser.decodeValue(valueNode?.text ?: "")
         return PsiEnvEntry(kNode.text, value, kNode, valueNode)
     }
 }

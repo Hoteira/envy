@@ -2,7 +2,7 @@ package com.envy.dotenv.terminal
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.DataContext
-import com.intellij.openapi.actionSystem.IdeActions
+import com.intellij.openapi.actionSystem.KeyboardShortcut
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
@@ -10,7 +10,6 @@ import com.intellij.openapi.editor.Caret
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.actionSystem.EditorActionHandler
-import com.intellij.openapi.editor.actionSystem.EditorActionManager
 import com.intellij.openapi.editor.colors.EditorFontType
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
@@ -23,8 +22,10 @@ import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.keymap.KeymapManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.util.Computable
 import com.intellij.openapi.util.Key
@@ -32,15 +33,17 @@ import com.intellij.util.Alarm
 import java.awt.datatransfer.StringSelection
 import com.envy.dotenv.inspections.SecretLeakInspection
 import com.envy.dotenv.licensing.LicenseChecker
+import com.envy.dotenv.licensing.LicenseStateListener
 import com.envy.dotenv.services.EnvFileService
 import java.awt.Color
 import java.awt.Font
 import java.awt.Graphics
 import java.awt.KeyEventDispatcher
 import java.awt.KeyboardFocusManager
-import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 import java.util.concurrent.ConcurrentHashMap
+import javax.swing.KeyStroke
+import javax.swing.SwingUtilities
 
 @Service(Service.Level.PROJECT)
 class TerminalSecretCensor(private val project: Project) : Disposable {
@@ -50,32 +53,29 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
         private val INVISIBLE_TEXT = TextAttributes(Color(0, 0, 0, 0), null, null, null, Font.PLAIN)
         internal val SESSION_KEY = Key.create<Session>("envy.terminalSecretCensor.session")
 
-        @Volatile private var copyHandlerInstalled = false
-        private val copyHandlerLock = Any()
-
-        private fun ensureCopyHandlerInstalled() {
-            if (copyHandlerInstalled) return
-            synchronized(copyHandlerLock) {
-                if (copyHandlerInstalled) return
-                val mgr = EditorActionManager.getInstance()
-                val original = mgr.getActionHandler(IdeActions.ACTION_EDITOR_COPY)
-                mgr.setActionHandler(IdeActions.ACTION_EDITOR_COPY, RedactingCopyHandler(original))
-                copyHandlerInstalled = true
-            }
-        }
+        /** Must match the action id in plugin.xml; its keymap shortcut drives the in-terminal toggle. */
+        private const val TOGGLE_ACTION_ID = "EnvY.ToggleTerminalSecrets"
+        private const val TERMINAL_TOOL_WINDOW_ID = "Terminal"
+        private const val OUTPUT_SCAN_INTERVAL_MS = 30
     }
 
     internal class Session {
-        var acState: Int = 0
-        var scannedUpTo: Int = 0
-        var needsFullRescan: Boolean = true
-        var isRevealed: Boolean = false
+        // Written by the scanner (pooled thread) and read by the toggle/listeners.
+        @Volatile var acState: Int = 0
+        @Volatile var scannedUpTo: Int = 0
+        @Volatile var needsFullRescan: Boolean = true
+        @Volatile var isRevealed: Boolean = false
+        /** Cheap flag the scanner can read without touching highlighters. Only written on the EDT. */
+        @Volatile var hasHighlighters: Boolean = false
+        /** EDT only: read and modified exclusively inside invokeLater blocks and the copy handler. */
         val activeHighlighters: MutableList<RangeHighlighter> = mutableListOf()
     }
 
     private val sessions = ConcurrentHashMap<Editor, Session>()
     private val pendingEditors = ConcurrentHashMap.newKeySet<Editor>()
     private val alarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
+    // Declared before init: init tracks existing terminals, which schedules a scan.
+    private val scanScheduled = java.util.concurrent.atomic.AtomicBoolean(false)
 
     private var cachedSecretValues: List<String> = emptyList()
     private var cachedAutomaton: AhoCorasick? = null
@@ -84,17 +84,37 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
 
     @Volatile private var disposed = false
 
-    private val TOGGLE_MODIFIERS = InputEvent.CTRL_DOWN_MASK or InputEvent.ALT_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK
-
+    /**
+     * The reworked terminal swallows action shortcuts, so the toggle is caught here instead. It only
+     * reacts when keyboard focus is inside one of THIS project's censored terminals, uses whatever
+     * shortcut the user bound to the toggle action in their keymap, and lets every other key event
+     * through untouched (so other projects' dispatchers and the IDE still see it).
+     */
     private val keyDispatcher = KeyEventDispatcher { e ->
-        if (e.id == KeyEvent.KEY_PRESSED &&
-            e.keyCode == KeyEvent.VK_X &&
-            (e.modifiersEx and TOGGLE_MODIFIERS) == TOGGLE_MODIFIERS
-        ) {
-            toggleAll()
-            true
-        } else {
-            false
+        if (disposed || e.id != KeyEvent.KEY_PRESSED || sessions.isEmpty()) return@KeyEventDispatcher false
+        if (!isToggleShortcut(e)) return@KeyEventDispatcher false
+        val focused = e.component
+            ?: KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner
+            ?: return@KeyEventDispatcher false
+        if (!isInOurTerminal(focused)) return@KeyEventDispatcher false
+        toggleAll()
+        true
+    }
+
+    private fun isInOurTerminal(focused: java.awt.Component): Boolean {
+        if (sessions.keys.any { !it.isDisposed && SwingUtilities.isDescendingFrom(focused, it.component) }) return true
+        // Fallback: focus can sit on a terminal wrapper rather than the tracked output editor.
+        if (project.isDisposed) return false
+        val terminalWindow = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
+            .getToolWindow(TERMINAL_TOOL_WINDOW_ID) ?: return false
+        return SwingUtilities.isDescendingFrom(focused, terminalWindow.component)
+    }
+
+    private fun isToggleShortcut(e: KeyEvent): Boolean {
+        val stroke = KeyStroke.getKeyStrokeForEvent(e)
+        val keymap = KeymapManager.getInstance()?.activeKeymap ?: return false
+        return keymap.getShortcuts(TOGGLE_ACTION_ID).any {
+            it is KeyboardShortcut && it.secondKeyStroke == null && it.firstKeyStroke == stroke
         }
     }
 
@@ -115,8 +135,6 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
     private val terminalCheck: (Editor) -> Boolean = resolveTerminalCheck()
 
     init {
-        ensureCopyHandlerInstalled()
-
         EditorFactory.getInstance().addEditorFactoryListener(object : EditorFactoryListener {
             override fun editorCreated(event: EditorFactoryEvent) {
                 if (disposed) return
@@ -162,14 +180,12 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
                         session.needsFullRescan = true
                         pendingEditors.add(editor)
                     }
-                    if (pendingEditors.isNotEmpty()) {
-                        alarm.cancelAllRequests()
-                        alarm.addRequest(::processPending, 100)
-                    }
+                    if (pendingEditors.isNotEmpty()) scheduleScan(100)
                 }
             })
 
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(keyDispatcher)
+        ClassicTerminalNotice.maybeShow(project)
         LOG.info("TerminalSecretCensor initialized for project: ${project.name}")
     }
 
@@ -252,7 +268,7 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
         sessions[editor] = session
         editor.putUserData(SESSION_KEY, session)
         pendingEditors.add(editor)
-        alarm.addRequest(::processPending, 10)
+        scheduleScan(10)
 
         editor.document.addDocumentListener(object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
@@ -262,10 +278,22 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
                     s.needsFullRescan = true
                 }
                 pendingEditors.add(editor)
-                alarm.cancelAllRequests()
-                alarm.addRequest(::processPending, 50)
+                // Throttle, don't debounce: with continuous output (logs, docker compose up) a
+                // restart-on-every-chunk timer would never fire and secrets would stay visible.
+                scheduleScan(OUTPUT_SCAN_INTERVAL_MS)
             }
         }, this)
+    }
+
+    /** At most one scan queued at a time; later requests ride on it instead of postponing it. */
+    private fun scheduleScan(delayMs: Int) {
+        if (disposed) return
+        if (scanScheduled.compareAndSet(false, true)) alarm.addRequest(::runScheduledScan, delayMs)
+    }
+
+    private fun runScheduledScan() {
+        scanScheduled.set(false)
+        processPending()
     }
 
     fun toggleAll(): Int {
@@ -274,10 +302,7 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
             session.needsFullRescan = true
             pendingEditors.add(editor)
         }
-        if (pendingEditors.isNotEmpty()) {
-            alarm.cancelAllRequests()
-            alarm.addRequest(::processPending, 10)
-        }
+        if (pendingEditors.isNotEmpty()) scheduleScan(10)
         return sessions.size
     }
 
@@ -291,8 +316,7 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
             val svc = project.getService(EnvFileService::class.java)
                 ?: return@Computable emptyList<String>()
             svc.getAllParsedEntries()
-                .filter { (k, v) -> SecretLeakInspection.isSecret(k, v) && v.length >= 4 }
-                .map { it.second }
+                .flatMap { (k, v) -> SecretLeakInspection.censorTargets(k, v) }
                 .distinct()
                 .sorted()
         })
@@ -314,8 +338,9 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
             if (sessions.isNotEmpty()) clearAll()
             return
         }
-        val editors = pendingEditors.toList()
-        pendingEditors.clear()
+        val editors = mutableListOf<Editor>()
+        val iter = pendingEditors.iterator()
+        while (iter.hasNext()) { editors += iter.next(); iter.remove() } // an editor re-added meanwhile stays queued
 
         val (automaton, wasRebuilt) = getAutomaton()
 
@@ -323,10 +348,9 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
             if (editor.isDisposed) { sessions.remove(editor); continue }
             val session = sessions[editor] ?: continue
 
-            session.activeHighlighters.removeAll { !it.isValid }
-
+            // Highlighters are EDT-only; this thread just computes ranges and hands them over.
             if (automaton == null || session.isRevealed) {
-                if (session.activeHighlighters.isNotEmpty()) clearHighlighters(editor, session)
+                if (session.hasHighlighters) clearHighlighters(editor, session)
                 continue
             }
 
@@ -396,6 +420,8 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
                     if (h.isValid) editor.markupModel.removeHighlighter(h)
                 }
                 session.activeHighlighters.clear()
+            } else {
+                session.activeHighlighters.removeAll { !it.isValid }
             }
 
             val docLen = editor.document.textLength
@@ -420,6 +446,7 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
                     if (e is com.intellij.openapi.progress.ProcessCanceledException) throw e
                 }
             }
+            session.hasHighlighters = session.activeHighlighters.isNotEmpty()
         }
     }
 
@@ -430,6 +457,7 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
                 if (h.isValid) editor.markupModel.removeHighlighter(h)
             }
             session.activeHighlighters.clear()
+            session.hasHighlighters = false
         }
     }
 
@@ -439,15 +467,26 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
         }
     }
 
+    /**
+     * Starts censoring terminals that were opened while EnvY was unlicensed (track() skips them),
+     * then rescans everything. Called on the EDT when the license becomes valid mid-session.
+     */
+    fun retrackAllEditors() {
+        if (disposed) return
+        for (editor in EditorFactory.getInstance().allEditors) {
+            val ep = editor.project
+            if (ep != null && ep != project) continue
+            if (!editor.isDisposed && terminalCheck(editor)) track(editor)
+        }
+        rescanAll()
+    }
+
     fun rescanAll() {
         for ((editor, session) in sessions) {
             session.needsFullRescan = true
             pendingEditors.add(editor)
         }
-        if (pendingEditors.isNotEmpty()) {
-            alarm.cancelAllRequests()
-            alarm.addRequest(::processPending, 10)
-        }
+        if (pendingEditors.isNotEmpty()) scheduleScan(10)
     }
 
     override fun dispose() {
@@ -462,12 +501,18 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
 }
 
 /**
- * Replaces the default EditorCopy handler so that selecting text containing
- * a censored secret in a tracked terminal editor places "***" on the clipboard
- * in place of the underlying secret bytes. Editors not tagged with SESSION_KEY
- * fall through to the original handler unchanged.
+ * Wraps the EditorCopy handler so that selecting text containing a censored secret in a tracked
+ * terminal editor places "***" on the clipboard instead of the secret. Editors not tagged with
+ * SESSION_KEY fall through to the original handler unchanged.
+ *
+ * Registered through the `editorActionHandler` extension point in plugin.xml (never through
+ * EditorActionManager.setActionHandler), so the platform restores the original handler when EnvY
+ * is disabled, updated or uninstalled without a restart.
  */
-private class RedactingCopyHandler(private val delegate: EditorActionHandler) : EditorActionHandler() {
+internal class RedactingCopyHandler(private val delegate: EditorActionHandler) : EditorActionHandler() {
+
+    override fun isEnabledForCaret(editor: Editor, caret: Caret, dataContext: DataContext?): Boolean =
+        delegate.isEnabled(editor, caret, dataContext)
 
     override fun doExecute(editor: Editor, caret: Caret?, dataContext: DataContext?) {
         val session = editor.getUserData(TerminalSecretCensor.SESSION_KEY)
@@ -586,5 +631,71 @@ internal class TerminalSecretCensorInitializer : ProjectActivity {
         DumbService.getInstance(project).runWhenSmart {
             project.getService(TerminalSecretCensor::class.java)
         }
+    }
+}
+
+/**
+ * Applies a license change without an IDE restart. When a license or trial becomes valid it creates
+ * the censor for every open project (startup skips it for unlicensed users) and starts tracking
+ * terminals that were opened while unlicensed. When the license goes away it removes the masks.
+ * Registered under <applicationListeners> in plugin.xml.
+ */
+internal class TerminalLicenseListener : LicenseStateListener {
+    override fun licenseStateChanged(licensed: Boolean) {
+        for (project in ProjectManager.getInstance().openProjects) {
+            if (project.isDisposed) continue
+            if (!licensed) {
+                project.getServiceIfCreated(TerminalSecretCensor::class.java)?.clearAll()
+                continue
+            }
+            if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.terminalSecretCensor) continue
+            DumbService.getInstance(project).runWhenSmart {
+                if (!project.isDisposed) {
+                    project.getService(TerminalSecretCensor::class.java)?.retrackAllEditors()
+                    ClassicTerminalNotice.maybeShow(project)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Terminal masking works on the editor-based terminal (Reworked 2025, the default since 2025.2).
+ * Users who switched back to the Classic engine would pay for a feature that silently does nothing
+ * there, so tell licensed users once per IDE session how to fix it.
+ */
+internal object ClassicTerminalNotice {
+    private val shown = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    fun maybeShow(project: Project) {
+        if (shown.get() || project.isDisposed) return
+        if (!LicenseChecker.isLicenseDetermined() || !LicenseChecker.isPaidFeatureAvailableStrict()) return
+        if (!isClassicEngine()) return
+        if (!shown.compareAndSet(false, true)) return
+        ApplicationManager.getApplication().invokeLater {
+            if (project.isDisposed) return@invokeLater
+            com.intellij.notification.NotificationGroupManager.getInstance().getNotificationGroup("EnvY")
+                .createNotification(
+                    "EnvY can't mask secrets in the Classic terminal",
+                    "Terminal masking works with the default terminal engine (Reworked 2025). " +
+                        "Run console and clipboard protection work either way.",
+                    com.intellij.notification.NotificationType.WARNING
+                )
+                .addAction(com.intellij.notification.NotificationAction.createSimpleExpiring("Open terminal settings") {
+                    com.intellij.openapi.options.ShowSettingsUtil.getInstance().showSettingsDialog(project, "Terminal")
+                })
+                .notify(project)
+        }
+    }
+
+    /** Reads the terminal engine setting by reflection: the option class isn't stable API. */
+    private fun isClassicEngine(): Boolean = try {
+        val optionsClass = Class.forName("org.jetbrains.plugins.terminal.TerminalOptionsProvider")
+        val companion = optionsClass.getField("Companion").get(null)
+        val options = companion.javaClass.getMethod("getInstance").invoke(companion)
+        val engine = options.javaClass.getMethod("getTerminalEngine").invoke(options)
+        engine?.toString()?.contains("CLASSIC", ignoreCase = true) == true
+    } catch (_: Throwable) {
+        false
     }
 }

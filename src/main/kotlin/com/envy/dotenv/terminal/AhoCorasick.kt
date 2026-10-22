@@ -11,11 +11,21 @@ class AhoCorasick private constructor(
     private val fail: IntArray,
     private val output: Array<List<Int>>,
     private val patternLengths: IntArray,
-    private val nonAsciiPatterns: List<String>
+    private val nonAsciiPatterns: List<String>,
+    private val depth: IntArray,
+    private val hasChildren: BooleanArray
 ) {
 
     data class Match(val startOffset: Int, val endOffset: Int)
     data class ScanResult(val matches: List<Match>, val endState: Int)
+
+    /**
+     * How many characters at the end of the scanned text could be the start of a secret that the
+     * next chunk completes (0 if none). Lets a streaming filter hold back that tail instead of
+     * printing half a secret.
+     */
+    fun pendingPrefixLength(state: Int): Int =
+        if (state <= 0 || state >= depth.size || !hasChildren[state]) 0 else depth[state]
 
     /**
      * Feeds [text] through the automaton starting from [initialState].
@@ -88,6 +98,7 @@ class AhoCorasick private constructor(
             val fail = IntArray(maxStates)
             val output = Array(maxStates) { mutableListOf<Int>() }
             val lengths = IntArray(asciiPatterns.size)
+            val depth = IntArray(maxStates)
             var stateCount = 1 // state 0 = root
 
             // --- build trie ---
@@ -96,11 +107,16 @@ class AhoCorasick private constructor(
                 var cur = 0
                 for (ch in pattern) {
                     val c = ch.code
-                    if (goto[cur][c] == -1) goto[cur][c] = stateCount++
+                    if (goto[cur][c] == -1) {
+                        goto[cur][c] = stateCount
+                        depth[stateCount] = depth[cur] + 1
+                        stateCount++
+                    }
                     cur = goto[cur][c]
                 }
                 output[cur].add(patIdx)
             }
+            val hasChildren = BooleanArray(stateCount) { s -> goto[s].any { it != -1 } }
 
             // --- build failure links (BFS) ---
             val queue = ArrayDeque<Int>()
@@ -126,7 +142,9 @@ class AhoCorasick private constructor(
                 fail.copyOf(stateCount),
                 Array(stateCount) { output[it].toList() },
                 lengths,
-                nonAsciiPatterns.toList()
+                nonAsciiPatterns.toList(),
+                depth.copyOf(stateCount),
+                hasChildren
             )
         }
     }

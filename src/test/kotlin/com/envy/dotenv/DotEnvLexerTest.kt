@@ -87,4 +87,36 @@ class DotEnvLexerTest : BasePlatformTestCase() {
         assertEquals(0, lexer.state)
         assertEquals(DotEnvTypes.KEY, lexer.tokenType)
     }
+
+    // Inline comments, multi-line quotes, unterminated quotes (Phase 1)
+
+    fun testInlineCommentAfterUnquotedValue() {
+        val tokens = tokenize("KEY=value # note")
+        assertEquals(DotEnvTypes.VALUE to "value", tokens[2])
+        assertEquals(DotEnvTypes.COMMENT to "# note", tokens.last())
+    }
+
+    fun testCommentAfterQuotedValue() {
+        val tokens = tokenize("KEY=\"a b\" # c")
+        assertEquals(DotEnvTypes.QUOTED_VALUE to "\"a b\"", tokens[2])
+        assertEquals(DotEnvTypes.COMMENT to "# c", tokens.last())
+    }
+
+    fun testSingleQuotedValueSpansLines() {
+        val tokens = tokenize("KEY='x\ny'\nB=1")
+        assertEquals(DotEnvTypes.QUOTED_VALUE to "'x\ny'", tokens[2])
+        assertTrue(tokens.contains(DotEnvTypes.KEY to "B"))
+    }
+
+    fun testUnterminatedQuoteStopsAtEndOfLine() {
+        val tokens = tokenize("KEY=\"unterminated\nB=1")
+        assertEquals(DotEnvTypes.QUOTED_VALUE to "\"unterminated", tokens[2])
+        assertTrue(tokens.contains(DotEnvTypes.KEY to "B"))
+    }
+
+    fun testCommentRightAfterSeparatorMeansEmptyValue() {
+        val tokens = tokenize("KEY= # nothing")
+        assertFalse(tokens.any { it.first == DotEnvTypes.VALUE || it.first == DotEnvTypes.QUOTED_VALUE })
+        assertEquals(DotEnvTypes.COMMENT to "# nothing", tokens.last())
+    }
 }

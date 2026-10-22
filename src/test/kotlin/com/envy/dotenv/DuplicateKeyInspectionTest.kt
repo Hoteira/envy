@@ -52,4 +52,20 @@ class DuplicateKeyInspectionTest : BasePlatformTestCase() {
         val highlights = myFixture.doHighlighting()
         assertTrue(highlights.any { it.description?.contains("Duplicate key 'KEY'") == true })
     }
+
+    // Phase 1: the overridden (earlier) definition is flagged and removed; the effective value stays.
+
+    fun testFixRemovesOverriddenDefinitionAndKeepsEffectiveValue() {
+        myFixture.configureByText(".env", "KEY=old\nOTHER=1\nKEY=new\n")
+        val fix = myFixture.getAllQuickFixes().first { it.text.startsWith("Remove this 'KEY'") }
+        myFixture.launchAction(fix)
+        myFixture.checkResult("OTHER=1\nKEY=new\n")
+    }
+
+    fun testFixRemovesWholeMultiLineEntry() {
+        myFixture.configureByText(".env", "KEY=\"a\nb\"\nKEY=c\n")
+        val fix = myFixture.getAllQuickFixes().first { it.text.startsWith("Remove this 'KEY'") }
+        myFixture.launchAction(fix)
+        myFixture.checkResult("KEY=c\n")
+    }
 }

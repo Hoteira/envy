@@ -18,7 +18,7 @@ import javax.swing.*
 class SopsSplitEditorProvider : FileEditorProvider, DumbAware {
 
     override fun accept(project: Project, file: VirtualFile): Boolean {
-        if (file.fileType != DotEnvFileType) return false
+        if (!com.envy.dotenv.services.EnvFileNames.isEnvFileName(file.name)) return false
         if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.sopsIntegration) return false
         if (!com.envy.dotenv.licensing.LicenseChecker.isPaidFeatureAvailable()) return false
         return SopsDetector.isSopsEncrypted(file)
@@ -106,15 +106,9 @@ class SopsSplitEditor(
                 }
             }
 
-            // Right: decrypted plaintext (editable)
-            val decDoc = FileDocumentManager.getInstance().getDocument(session.decryptedFile)
-                ?: factory.createDocument(session.decryptedFile.content.toString())
-            
-            decryptedEditor = if (FileDocumentManager.getInstance().getFile(decDoc) == session.decryptedFile) {
-                factory.createEditor(decDoc, project, session.decryptedFile, false)
-            } else {
-                factory.createEditor(decDoc, project)
-            }.also { editor ->
+            // Right: decrypted plaintext (editable). Always the session's own document: that is the
+            // one SopsService watches and re-encrypts.
+            decryptedEditor = factory.createEditor(session.document, project, session.decryptedFile, false).also { editor ->
                 (editor as? EditorEx)?.let { ex ->
                     ex.highlighter = EditorHighlighterFactory.getInstance().createEditorHighlighter(project, DotEnvFileType)
                 }
@@ -142,8 +136,9 @@ class SopsSplitEditor(
     override fun getPreferredFocusedComponent(): JComponent? = decryptedEditor?.contentComponent
     override fun getName(): String = "SOPS Decrypted"
     override fun isModified(): Boolean {
-        val doc = decryptedEditor?.document ?: return false
-        return FileDocumentManager.getInstance().isDocumentUnsaved(doc)
+        val svc = project.getServiceIfCreated(SopsService::class.java) ?: return false
+        val session = svc.getSession(realFile) ?: return false
+        return svc.isDirty(session)
     }
     override fun isValid(): Boolean = realFile.isValid
 
@@ -154,8 +149,20 @@ class SopsSplitEditor(
     override fun getFile(): VirtualFile = realFile
 
     override fun dispose() {
+        // Write unsaved plaintext before the session goes away (tab, project or IDE closing).
+        // getServiceIfCreated: the project may already be disposing; a session implies the service exists.
+        val svc = project.getServiceIfCreated(SopsService::class.java)
+        try {
+            if (svc != null) {
+                svc.getSession(realFile)?.let { svc.flushBlocking(it) }
+            }
+        } catch (e: Exception) {
+            if (e is com.intellij.openapi.progress.ProcessCanceledException) throw e
+            com.intellij.openapi.diagnostic.Logger.getInstance(SopsSplitEditor::class.java)
+                .warn("Failed to save SOPS edits for ${realFile.path}", e)
+        }
         rawEditor?.let { EditorFactory.getInstance().releaseEditor(it) }
         decryptedEditor?.let { EditorFactory.getInstance().releaseEditor(it) }
-        project.getService(SopsService::class.java)?.closeSession(realFile)
+        svc?.closeSession(realFile)
     }
 }

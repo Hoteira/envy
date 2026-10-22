@@ -109,6 +109,13 @@ class EnvDiffPanel(private val project: Project) : JPanel(BorderLayout()), Dispo
 
     private fun loadFiles() {
         loading = true
+        // The env-file list comes from the file index, which isn't available while indexing.
+        com.intellij.openapi.project.DumbService.getInstance(project).runWhenSmart {
+            if (!disposed && !project.isDisposed) loadFilesNow()
+        }
+    }
+
+    private fun loadFilesNow() {
         com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
             if (disposed || project.isDisposed) return@executeOnPooledThread
             

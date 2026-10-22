@@ -77,6 +77,7 @@ Seamlessly edit SOPS-encrypted .env files with in-memory decryption/re-encryptio
 | Secret values hidden in presentation mode |  ✓   | ✓ |
 | Quick-fix: reveal hidden key / reveal all |  ✓   | ✓ |
 | Env var autocomplete in code |  ✓   | ✓ |
+| Inline ghost completion (Tab to accept) |  ✓   | ✓ |
 | Secret leak detection |  ✓   | ✓ |
 | Gitignore verification for secrets |  ✓   | ✓ |
 | Sensitive key name detection |  ✓   | ✓ |
@@ -84,7 +85,6 @@ Seamlessly edit SOPS-encrypted .env files with in-memory decryption/re-encryptio
 | Toggle secret visibility (Ctrl+Alt+Shift+X) |      | ✓ |
 | Clipboard redaction on copy |      | ✓ |
 | Run/Debug console secret redaction |      | ✓ |
-| Inline ghost completion (Tab to accept) |      | ✓ |
 | SOPS encrypted .env file support |      | ✓ |
 
 ## Installation

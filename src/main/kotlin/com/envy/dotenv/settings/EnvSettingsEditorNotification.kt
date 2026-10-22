@@ -7,7 +7,6 @@ import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.EditorNotificationProvider
 import com.intellij.util.ui.JBUI
-import com.envy.dotenv.language.DotEnvFileType
 import java.awt.BorderLayout
 import java.awt.Cursor
 import java.awt.Dimension
@@ -28,7 +27,8 @@ class EnvSettingsEditorNotification : EditorNotificationProvider, DumbAware {
         project: Project,
         file: VirtualFile
     ): Function<in FileEditor, out JComponent?>? {
-        if (file.fileType != DotEnvFileType) return null
+        // By name, not file type: JetBrains' bundled .env plugin may own the file type.
+        if (!com.envy.dotenv.services.EnvFileNames.isEnvFileName(file.name)) return null
 
         com.envy.dotenv.engagement.EngagementTracker.getInstance().onEnvFileShown(project, file)
 

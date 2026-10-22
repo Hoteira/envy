@@ -90,16 +90,35 @@
         <fileEditorProvider
                 implementation="com.envy.dotenv.sops.SopsSplitEditorProvider"/>
 
+        <!-- Clipboard redaction for censored terminals. Registered here (not via
+             EditorActionManager.setActionHandler) so the platform restores the original
+             Copy handler when EnvY is unloaded. -->
+        <editorActionHandler
+                action="EditorCopy"
+                implementationClass="com.envy.dotenv.terminal.RedactingCopyHandler"
+                order="first"/>
+
+        <!-- Lets users send EnvY exceptions and freezes from the IDE error dialog; they show up
+             in the JetBrains Marketplace vendor dashboard (Exception Analyzer). -->
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
+
     </extensions>
 
     <applicationListeners>
         <listener class="com.envy.dotenv.listeners.DotEnvPresentationModeListener"
                   topic="com.intellij.ide.ui.UISettingsListener"/>
+        <listener class="com.envy.dotenv.terminal.TerminalLicenseListener"
+                  topic="com.envy.dotenv.licensing.LicenseStateListener"/>
     </applicationListeners>
+
+    <projectListeners>
+        <listener class="com.envy.dotenv.listeners.EnvVcsStatusListener"
+                  topic="com.intellij.openapi.vcs.changes.ChangeListListener"/>
+    </projectListeners>
 
     <product-descriptor
             code="PENVY"
-            release-date="20260720"
+            release-date="20261022"
             release-version="32"
             optional="true"/>
 

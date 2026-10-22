@@ -40,7 +40,7 @@ object EnvSettingsPopup {
         FeatureRow(FeatureId.SECRET_LEAK, "Secret Leak Detection", false, { it.secretLeakDetection }, { s, v -> s.secretLeakDetection = v }),
         FeatureRow(FeatureId.TERMINAL_CENSOR, "Terminal Secret Censor (Ctrl+Alt+Shift+X)", true, { it.terminalSecretCensor }, { s, v -> s.terminalSecretCensor = v }),
         FeatureRow(FeatureId.CONSOLE_REDACTION, "Console Secret Redaction", true, { it.consoleSecretRedaction }, { s, v -> s.consoleSecretRedaction = v }),
-        FeatureRow(FeatureId.GHOST_COMPLETION, "Inline Ghost Completion", true, { it.inlineGhostCompletion }, { s, v -> s.inlineGhostCompletion = v }),
+        FeatureRow(FeatureId.GHOST_COMPLETION, "Inline Ghost Completion", false, { it.inlineGhostCompletion }, { s, v -> s.inlineGhostCompletion = v }),
         FeatureRow(FeatureId.SOPS, "SOPS Integration", true, { it.sopsIntegration }, { s, v -> s.sopsIntegration = v })
     )
 

@@ -7,7 +7,6 @@ import com.intellij.codeInsight.inline.completion.suggestion.InlineCompletionVar
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.util.TextRange
 import com.envy.dotenv.services.EnvFileService
-import com.envy.dotenv.licensing.LicenseChecker
 import com.envy.dotenv.language.DotEnvFileType
 
 class EnvVarInlineCompletionProvider : InlineCompletionProvider {
@@ -42,8 +41,8 @@ class EnvVarInlineCompletionProvider : InlineCompletionProvider {
     override fun isEnabled(event: InlineCompletionEvent): Boolean {
         if (event !is InlineCompletionEvent.DocumentChange) return false
         if (event.editor.virtualFile?.fileType is DotEnvFileType) return false
-        if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.inlineGhostCompletion) return false
-        return LicenseChecker.isPaidFeatureAvailable()
+        // Free since 3.2.1: regular completion of the same keys is free, so this never sold Pro.
+        return com.envy.dotenv.settings.EnvySettings.getInstance().state.inlineGhostCompletion
     }
 
     override suspend fun getSuggestion(request: InlineCompletionRequest): InlineCompletionSuggestion {

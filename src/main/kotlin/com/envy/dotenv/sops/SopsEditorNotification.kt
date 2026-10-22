@@ -9,7 +9,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.EditorNotificationPanel
 import com.intellij.ui.EditorNotificationProvider
-import com.envy.dotenv.language.DotEnvFileType
 import java.util.function.Function
 import javax.swing.JComponent
 
@@ -19,7 +18,7 @@ class SopsEditorNotification : EditorNotificationProvider, DumbAware {
         project: Project,
         file: VirtualFile
     ): Function<in FileEditor, out JComponent?>? {
-        if (file.fileType != DotEnvFileType) return null
+        if (!com.envy.dotenv.services.EnvFileNames.isEnvFileName(file.name)) return null
         if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.sopsIntegration) return null
         if (!com.envy.dotenv.licensing.LicenseChecker.isPaidFeatureAvailableStrict()) return null
         if (!SopsDetector.isSopsEncrypted(file)) return null

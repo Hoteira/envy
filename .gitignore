@@ -3,7 +3,6 @@ build/
 
 # Gradle
 .gradle/
-gradle/wrapper/gradle-wrapper.jar
 
 # IDE
 .idea/
@@ -16,3 +15,8 @@ Thumbs.db
 # Env files (ironic)
 
 .intellijPlatform/
+
+src/test/kotlin/com/envy/dotenv/*
+
+# Test fixtures with fake API keys (GitHub push protection blocks them)
+src/test/resources/golden/

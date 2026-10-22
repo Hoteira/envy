@@ -86,4 +86,20 @@ class EnvFileServiceTest : BasePlatformTestCase() {
         val result = parse("KEY=first\nKEY=second")
         assertEquals("second", result["KEY"])
     }
+
+    // Phase 1: the service parses values exactly like the editor does
+
+    fun testInlineCommentIsNotPartOfValue() {
+        assertEquals("sk_live_abc", parse("KEY=sk_live_abc  # rotated")["KEY"])
+    }
+
+    fun testHashWithoutSpaceStaysInValue() {
+        assertEquals("pa#ss", parse("KEY=pa#ss")["KEY"])
+    }
+
+    fun testMultiLineDoubleQuotedValue() {
+        val result = parse("PEM=\"-----BEGIN-----\nABC\n-----END-----\"\nNEXT=1")
+        assertEquals("-----BEGIN-----\nABC\n-----END-----", result["PEM"])
+        assertEquals("1", result["NEXT"])
+    }
 }

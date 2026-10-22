@@ -2,6 +2,8 @@ package com.envy.dotenv.services
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.project.DumbService
+import com.intellij.openapi.project.IndexNotReadyException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -42,6 +44,8 @@ class EnvFileService(private val project: Project) : Disposable {
 
     private companion object {
         const val MAX_ENV_FILE_SIZE = 5L * 1024 * 1024 // 5 MB
+        /** File type name registered by JetBrains' .env plugin (ru.adelf.idea.dotenv). */
+        const val OTHER_DOTENV_FILE_TYPE = ".env file"
     }
 
     private val fileKeyValues = ConcurrentHashMap<String, Map<String, String>>()
@@ -52,10 +56,7 @@ class EnvFileService(private val project: Project) : Disposable {
 
     @Volatile private var disposed = false
 
-    private fun isEnvPath(path: String): Boolean {
-        val name = path.substringAfterLast('/')
-        return name == ".env" || name == ".envrc" || (name.startsWith(".env.") && !name.contains('/'))
-    }
+    private fun isEnvPath(path: String): Boolean = EnvFileNames.isEnvPath(path)
 
     private fun notifyListeners() {
         modificationCount.incrementAndGet()
@@ -64,17 +65,36 @@ class EnvFileService(private val project: Project) : Disposable {
 
     private val connection = ApplicationManager.getApplication().messageBus.connect(this)
 
+    // The file index can't be queried while the IDE is indexing (dumb mode): doing so throws
+    // IndexNotReadyException, which users see as "EnvY caused an error". During dumb mode this
+    // returns an empty list that is invalidated when indexing ends (DumbService's tracker), and
+    // exitDumbMode() below re-parses everything and notifies the censor and completion.
     private val fileListCachedValue: CachedValue<List<VirtualFile>> =
         CachedValuesManager.getManager(project).createCachedValue {
+            val dumbService = DumbService.getInstance(project)
             val files = ApplicationManager.getApplication().runReadAction(Computable {
                 com.intellij.openapi.progress.ProgressManager.checkCanceled()
-                if (project.isDisposed) return@Computable emptyList<VirtualFile>()
-                FileTypeIndex.getFiles(DotEnvFileType, GlobalSearchScope.projectScope(project)).filter { file ->
-                    val p = file.path
-                    !p.contains("/.git/") && !p.contains("/node_modules/")
-                }.sortedBy { it.path }
+                if (project.isDisposed || dumbService.isDumb) return@Computable emptyList<VirtualFile>()
+                try {
+                    // Index by EnvY's file type AND JetBrains' bundled ".env file" type: when both
+                    // plugins are installed only one owns .env files, and the terminal/console
+                    // censor and completion must work either way.
+                    val scope = GlobalSearchScope.projectScope(project)
+                    val types = listOfNotNull(
+                        DotEnvFileType,
+                        com.intellij.openapi.fileTypes.FileTypeManager.getInstance()
+                            .findFileTypeByName(OTHER_DOTENV_FILE_TYPE)
+                            ?.takeIf { it != DotEnvFileType }
+                    )
+                    types.flatMap { FileTypeIndex.getFiles(it, scope) }.distinct().filter { file ->
+                        val p = file.path
+                        isEnvPath(p) && !p.contains("/.git/") && !p.contains("/node_modules/")
+                    }.sortedBy { it.path }
+                } catch (_: IndexNotReadyException) {
+                    emptyList()
+                }
             })
-            CachedValueProvider.Result.create(files, modificationTracker)
+            CachedValueProvider.Result.create(files, modificationTracker, dumbService.modificationTracker)
         }
 
     private val allKeyValuesCachedValue: CachedValue<Map<String, String>> =
@@ -165,9 +185,21 @@ class EnvFileService(private val project: Project) : Disposable {
             }
         }, this)
 
-        // Initial build
+        // Re-read everything once indexing finishes: anything asked for during dumb mode got an
+        // empty file list, and the terminal censor's automaton would otherwise stay empty.
+        project.messageBus.connect(this).subscribe(DumbService.DUMB_MODE, object : DumbService.DumbModeListener {
+            override fun exitDumbMode() {
+                rebuildAll()
+            }
+        })
+
+        // Initial build (empty while indexing; exitDumbMode() fills it in).
+        rebuildAll()
+    }
+
+    private fun rebuildAll() {
         ApplicationManager.getApplication().executeOnPooledThread {
-            if (disposed) return@executeOnPooledThread
+            if (disposed || project.isDisposed) return@executeOnPooledThread
             for (file in fileListCachedValue.value) {
                 parseAndStore(file)
             }

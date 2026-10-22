@@ -74,8 +74,19 @@ object SopsDetector {
         } else {
             listOf("sops")
         }
-        val pathDirs = System.getenv("PATH")?.split(java.io.File.pathSeparator) ?: return null
-        for (dir in pathDirs) {
+        // The IDE's own PATH on macOS is the GUI one (no Homebrew). EnvironmentUtil has the
+        // login-shell environment, which is where users installed sops.
+        val shellPath = try {
+            com.intellij.util.EnvironmentUtil.getValue("PATH")
+        } catch (_: Throwable) {
+            null
+        }
+        val dirs = linkedSetOf<String>()
+        for (path in listOfNotNull(shellPath, System.getenv("PATH"))) {
+            dirs += path.split(java.io.File.pathSeparator).filter { it.isNotBlank() }
+        }
+        dirs += listOf("/opt/homebrew/bin", "/usr/local/bin", "/home/linuxbrew/.linuxbrew/bin")
+        for (dir in dirs) {
             for (name in names) {
                 val file = java.io.File(dir, name)
                 if (file.isFile && file.canExecute()) return file.absolutePath

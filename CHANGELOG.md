@@ -1,5 +1,38 @@
 # Changelog
 
+## [3.2.1]
+
+### Free vs Pro
+- Inline ghost completion (Tab to accept) is now free for everyone.
+
+### Improved
+- Database and service URLs with a password inside (`DATABASE_URL=postgres://user:pass@host/db`, `REDIS_URL`, `MONGODB_URI`) are now recognised as secrets. The terminal and Run console mask only the password, so the host stays readable.
+- Multi-line values (PEM private keys, certificates, JSON) are read correctly everywhere, and each line of a private key is masked in the terminal.
+- `KEY=value # note`: inline comments are no longer treated as part of the value, so these secrets are masked too.
+- Common words such as `postgres` or `admin` used as dev passwords are still flagged in the editor but no longer masked in the terminal, so commands and image names stay readable.
+- Secrets in fast, continuous terminal output (logs, `docker compose up`) are masked while it streams, not only when output pauses.
+- A secret split across two chunks of Run console output is still masked.
+- Fewer false alarms: names like `AUTHOR` or `KEYBOARD_LAYOUT`, public values (`NEXT_PUBLIC_*`, publishable and anon keys) and `${VARIABLE}` references are no longer reported as secrets. More token formats are recognised (Anthropic, Google, Hugging Face, npm, GitHub fine-grained).
+- Secret warnings use the level set in Settings | Editor | Inspections (warning by default) instead of a hard-coded red error.
+- No "not gitignored" warnings in projects without version control, and `.env` files that hold shared defaults next to a `.env.local` (Symfony, Next.js) only report real credential formats.
+- A `.env` file that git already tracks now says so and offers "Stop tracking in git" instead of adding a duplicate .gitignore line that changes nothing.
+- "Remove duplicate" now removes the earlier definition that is overridden, keeping the value that actually takes effect, and removes multi-line values completely.
+- Terminal masking, completion and the settings banner also work when JetBrains' built-in .env plugin owns `.env` files.
+- A one-time note explains that terminal masking needs the default terminal engine if you switched to Classic.
+- `sops` installed with Homebrew is found on macOS.
+- When EnvY hits an error you can send the report to the developer from the IDE's error dialog.
+
+### Fixed
+- Copy keeps working after EnvY is disabled, updated or uninstalled without restarting the IDE. Clipboard redaction now hooks in through the IDE's standard extension point.
+- The Ctrl+Alt+Shift+X toggle only reacts inside a censored terminal and follows your keymap. It no longer swallows the shortcut everywhere else or toggles the wrong project when several are open.
+- SOPS: saving no longer rewrites encrypted files you didn't change, so they stop showing up as modified in git after every focus switch or build.
+- SOPS: edits are written when you close the decrypted editor, the project or the IDE, instead of risking a lost background write.
+- SOPS: re-encryption keeps the file's encryption rules (encrypted regex or suffix, Shamir threshold, MAC mode), supports Azure Key Vault and HashiCorp Vault keys, and refuses to write if recipients or rules would change.
+- No more "EnvY caused an error" reports while the IDE is indexing a project.
+- Fixed a rare crash in the terminal censor when a lot of output arrived at once.
+- Starting a trial or buying a license turns on terminal and Run console protection right away, including terminals and consoles that were already open.
+- Pro features no longer stay unlocked if the IDE's licensing service never answers.
+
 ## [3.2.0]
 
 ### Fixed

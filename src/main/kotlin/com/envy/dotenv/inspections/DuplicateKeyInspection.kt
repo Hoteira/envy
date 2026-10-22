@@ -1,13 +1,23 @@
 package com.envy.dotenv.inspections
 
 import com.intellij.codeInspection.LocalInspectionTool
-import com.intellij.codeInspection.ProblemsHolder
+import com.intellij.codeInspection.LocalQuickFix
+import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.codeInspection.ProblemHighlightType
+import com.intellij.codeInspection.ProblemsHolder
+import com.intellij.openapi.project.Project
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElementVisitor
 import com.intellij.psi.PsiFile
 import com.envy.dotenv.language.psi.DotEnvFile
+import com.envy.dotenv.language.psi.DotEnvTypes
 import com.envy.dotenv.services.PsiEnvExtractor
 
+/**
+ * When a key is defined more than once, loaders use the LAST value. The earlier definitions are
+ * dead, so those are the ones flagged, and the quick fix removes them: the value that actually
+ * takes effect never changes.
+ */
 class DuplicateKeyInspection : LocalInspectionTool() {
 
     override fun getDisplayName(): String = "Duplicate key in .env file"
@@ -21,55 +31,52 @@ class DuplicateKeyInspection : LocalInspectionTool() {
                 if (file !is DotEnvFile) return
                 if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.duplicateKeyDetection) return
 
-                val entries = PsiEnvExtractor.extractEntries(file)
-                val document = com.intellij.psi.PsiDocumentManager.getInstance(holder.project).getDocument(file) ?: return
-                val seen = mutableMapOf<String, Int>() // key -> first occurrence (1-indexed line)
+                val document = PsiDocumentManager.getInstance(holder.project).getDocument(file) ?: return
+                val byKey = PsiEnvExtractor.extractEntries(file).groupBy { it.key }
 
-                for (entry in entries) {
-                    val lineNum = document.getLineNumber(entry.keyNode.startOffset) + 1
-
-                    if (seen.containsKey(entry.key)) {
+                for ((key, occurrences) in byKey) {
+                    if (occurrences.size < 2) continue
+                    val effectiveLine = document.getLineNumber(occurrences.last().keyNode.startOffset) + 1
+                    for (overridden in occurrences.dropLast(1)) {
                         holder.registerProblem(
-                            entry.keyNode.psi,
-                            "Duplicate key '${entry.key}' - first defined on line ${seen[entry.key]}",
+                            overridden.keyNode.psi,
+                            "Duplicate key '$key' - overridden by the definition on line $effectiveLine",
                             ProblemHighlightType.WARNING,
-                            RemoveDuplicateFix(entry.key)
+                            RemoveDuplicateFix(key, effectiveLine)
                         )
-                        com.envy.dotenv.engagement.EngagementTracker.getInstance().onIssueCaught()
-                    } else {
-                        seen[entry.key] = lineNum
                     }
+                    com.envy.dotenv.engagement.EngagementTracker.getInstance().onIssueCaught()
                 }
             }
         }
     }
 }
 
-class RemoveDuplicateFix(private val key: String) : com.intellij.codeInspection.LocalQuickFix {
-    override fun getName(): String = "Remove duplicate '$key'"
-    override fun getFamilyName(): String = "DotEnv"
+/** Deletes the whole overridden entry, including every line of a multi-line value and its line break. */
+class RemoveDuplicateFix(private val key: String, private val effectiveLine: Int) : LocalQuickFix {
+    override fun getName(): String = "Remove this '$key' (line $effectiveLine wins)"
+    override fun getFamilyName(): String = "Remove overridden duplicate key"
 
-    override fun applyFix(project: com.intellij.openapi.project.Project, descriptor: com.intellij.codeInspection.ProblemDescriptor) {
-        val element = descriptor.psiElement ?: return
-        val file = element.containingFile ?: return
-        val document = com.intellij.psi.PsiDocumentManager.getInstance(project).getDocument(file) ?: return
+    override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
+        val keyElement = descriptor.psiElement ?: return
+        val file = keyElement.containingFile ?: return
+        val document = PsiDocumentManager.getInstance(project).getDocument(file) ?: return
 
-        val lineIndex = document.getLineNumber(element.textOffset)
-        val lineStart = document.getLineStartOffset(lineIndex)
-        val lineEnd = document.getLineEndOffset(lineIndex)
+        val entry = keyElement.node.treeParent?.takeIf { it.elementType == DotEnvTypes.ENTRY } ?: keyElement.node
+        val start = document.getLineStartOffset(document.getLineNumber(entry.startOffset))
+        val entryEnd = entry.textRange.endOffset
 
         val chars = document.charsSequence
         val textLength = document.textLength
-
-        // Handle both \n and \r\n line endings
-        val deleteEnd = when {
-            lineEnd + 1 < textLength && chars[lineEnd] == '\r' && chars[lineEnd + 1] == '\n' -> lineEnd + 2
-            lineEnd < textLength && (chars[lineEnd] == '\n' || chars[lineEnd] == '\r') -> lineEnd + 1
-            else -> lineEnd
+        val end = when {
+            entryEnd + 1 < textLength && chars[entryEnd] == '\r' && chars[entryEnd + 1] == '\n' -> entryEnd + 2
+            entryEnd < textLength && (chars[entryEnd] == '\n' || chars[entryEnd] == '\r') -> entryEnd + 1
+            else -> entryEnd
         }
 
-        com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(project) {
-            document.deleteString(lineStart, deleteEnd)
-        }
+        // startInWriteAction() is true (the default), so the document can be edited directly; this
+        // also lets the platform show an accurate preview on a copy of the file.
+        document.deleteString(start, end)
+        PsiDocumentManager.getInstance(project).commitDocument(document)
     }
 }

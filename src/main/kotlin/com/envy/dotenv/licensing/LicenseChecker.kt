@@ -3,12 +3,27 @@ package com.envy.dotenv.licensing
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.ui.LicensingFacade
+import com.intellij.util.messages.Topic
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.security.Signature
 import java.security.cert.*
 import java.util.Base64
 import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * Published on the EDT when EnvY's license state is resolved for the first time and whenever it
+ * changes afterwards (trial started, license bought, license expired). Lets Pro features switch on
+ * or off without an IDE restart.
+ */
+interface LicenseStateListener {
+    fun licenseStateChanged(licensed: Boolean)
+
+    companion object {
+        @JvmField
+        val TOPIC: Topic<LicenseStateListener> = Topic.create("EnvY license state", LicenseStateListener::class.java)
+    }
+}
 
 object LicenseChecker {
 
@@ -20,6 +35,15 @@ object LicenseChecker {
     private const val EVAL_PREFIX = "eval:"
 
     private const val TIMESTAMP_VALIDITY_PERIOD_MS = 60 * 60 * 1000L // 1 hour
+
+    /**
+     * How long Pro features run optimistically while the IDE's licensing subsystem is still starting
+     * (so paying users never see a flicker at startup). After this window an undetermined state is
+     * treated as unlicensed: JetBrains documents a null LicensingFacade as "not known yet", not as
+     * licensed, and an IDE where it never initialises must not unlock Pro forever.
+     */
+    private const val OPTIMISTIC_WINDOW_MS = 60_000L
+    private val startedAt: Long = System.currentTimeMillis()
 
     private val ROOT_CERTIFICATES = arrayOf(
         // JetProfile CA
@@ -103,7 +127,7 @@ object LicenseChecker {
             triggerCheck()
         }
 
-        return if (hasCheckedOnce) cachedAvailable else true
+        return if (hasCheckedOnce) cachedAvailable else now - startedAt < OPTIMISTIC_WINDOW_MS
     }
 
     /**
@@ -137,13 +161,13 @@ object LicenseChecker {
                 try {
                     val result = computeAvailability()
                     if (result != null) {
-                        val firstCheck = !hasCheckedOnce
+                        val changed = !hasCheckedOnce || cachedAvailable != result
                         cachedAvailable = result
                         cacheExpiry = System.currentTimeMillis() + 30_000L
                         nextCheckTime = cacheExpiry
                         hasCheckedOnce = true
 
-                        if (firstCheck) {
+                        if (changed) {
                             ApplicationManager.getApplication().invokeLater {
                                 val pm = com.intellij.openapi.project.ProjectManager.getInstance()
                                 for (proj in pm.openProjects) {
@@ -151,6 +175,9 @@ object LicenseChecker {
                                         com.intellij.ui.EditorNotifications.getInstance(proj).updateAllNotifications()
                                     }
                                 }
+                                ApplicationManager.getApplication().messageBus
+                                    .syncPublisher(LicenseStateListener.TOPIC)
+                                    .licenseStateChanged(result)
                             }
                         }
                     } else {
@@ -174,9 +201,12 @@ object LicenseChecker {
                 else -> false
             }
         } catch (e: Exception) {
+            if (e is com.intellij.openapi.progress.ProcessCanceledException) throw e
+            // A failure to *reach* the licensing subsystem is "unknown", not "unlicensed": retry
+            // shortly instead of locking a paying user out for the next 30 seconds.
             LOG.debug("License check failed", e)
+            return null
         }
-        return false
     }
 
     private fun isKeyValid(key: String): Boolean {
