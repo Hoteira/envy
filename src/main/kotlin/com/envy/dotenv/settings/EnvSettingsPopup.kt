@@ -62,6 +62,13 @@ object EnvSettingsPopup {
         panel.add(JSeparator().apply { alignmentX = Component.LEFT_ALIGNMENT; maximumSize = Dimension(Int.MAX_VALUE, 1) })
         panel.add(Box.createVerticalStrut(6))
 
+        // Set once the popup exists, so locked rows can close it before opening the trial dialog.
+        var popupRef: com.intellij.openapi.ui.popup.JBPopup? = null
+        fun offerTrial(featureName: String) {
+            popupRef?.cancel()
+            com.envy.dotenv.licensing.ProUpgrade.requestTrial("$featureName is part of EnvY Pro. Try it free for 30 days.")
+        }
+
         for (feature in features) {
             val row = JPanel(BorderLayout(8, 0))
             row.alignmentX = Component.LEFT_ALIGNMENT
@@ -73,6 +80,8 @@ object EnvSettingsPopup {
             val toggle = ToggleSwitch(feature.getter(state))
             if (proLocked) {
                 toggle.locked = true
+                toggle.toolTipText = "Part of EnvY Pro. Click to start a free trial."
+                toggle.onLockedClick = { offerTrial(feature.name.substringBefore(" (")) }
             }
             toggle.onToggle = { on ->
                 if (!proLocked) {
@@ -90,6 +99,11 @@ object EnvSettingsPopup {
             if (proLocked) {
                 nameLabel.foreground = UIManager.getColor("Label.disabledForeground")
                     ?: nameLabel.foreground.let { Color(it.red, it.green, it.blue, 128) }
+                nameLabel.toolTipText = "Part of EnvY Pro. Click to start a free trial."
+                nameLabel.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+                nameLabel.addMouseListener(object : MouseAdapter() {
+                    override fun mouseClicked(e: MouseEvent) = offerTrial(feature.name.substringBefore(" ("))
+                })
             }
             labelPanel.add(nameLabel)
 
@@ -106,16 +120,17 @@ object EnvSettingsPopup {
         panel.add(JSeparator().apply { alignmentX = Component.LEFT_ALIGNMENT; maximumSize = Dimension(Int.MAX_VALUE, 1) })
         panel.add(Box.createVerticalStrut(6))
 
-        val link = JLabel("Free trial ↗")
-        link.foreground = Color(0x08, 0x7C, 0xFA)
-        link.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-        link.alignmentX = Component.LEFT_ALIGNMENT
-        link.addMouseListener(object : MouseAdapter() {
-            override fun mouseClicked(e: MouseEvent) {
-                com.intellij.ide.BrowserUtil.browse("https://plugins.jetbrains.com/plugin/31217-envy/pricing")
-            }
-        })
-        panel.add(link)
+        // Paying users don't need a trial link.
+        if (!hasPro) {
+            val link = JLabel("Try EnvY Pro free for 30 days")
+            link.foreground = Color(0x08, 0x7C, 0xFA)
+            link.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            link.alignmentX = Component.LEFT_ALIGNMENT
+            link.addMouseListener(object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent) = offerTrial("Terminal, Run console and clipboard masking")
+            })
+            panel.add(link)
+        }
 
         val popup = JBPopupFactory.getInstance()
             .createComponentPopupBuilder(panel, null)
@@ -126,6 +141,7 @@ object EnvSettingsPopup {
             .setCancelOnClickOutside(true)
             .setCancelOnOtherWindowOpen(true)
             .createPopup()
+        popupRef = popup
 
         val popupSize = panel.preferredSize
         val ownerLocation = owner.locationOnScreen
@@ -225,6 +241,7 @@ object EnvSettingsPopup {
             set(value) { field = value; repaint() }
         var locked: Boolean = false
         var onToggle: ((Boolean) -> Unit)? = null
+        var onLockedClick: (() -> Unit)? = null
 
         private val trackW = JBUI.scale(36)
         private val trackH = JBUI.scale(18)
@@ -239,7 +256,7 @@ object EnvSettingsPopup {
             isOpaque = false
             addMouseListener(object : MouseAdapter() {
                 override fun mouseClicked(e: MouseEvent) {
-                    if (locked) return
+                    if (locked) { onLockedClick?.invoke(); return }
                     isOn = !isOn
                     onToggle?.invoke(isOn)
                 }

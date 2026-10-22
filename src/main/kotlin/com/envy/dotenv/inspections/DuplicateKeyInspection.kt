@@ -78,5 +78,6 @@ class RemoveDuplicateFix(private val key: String, private val effectiveLine: Int
         // also lets the platform show an accurate preview on a copy of the file.
         document.deleteString(start, end)
         PsiDocumentManager.getInstance(project).commitDocument(document)
+        recordWin(project)
     }
 }

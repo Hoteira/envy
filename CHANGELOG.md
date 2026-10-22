@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.3.0]
+
+### New
+- Start the EnvY Pro trial right inside the IDE: every "try Pro" button opens the IDE's license dialog with EnvY selected, no browser needed.
+- The first time you open a .env file with secrets, EnvY tells you how many it found and what Pro does with them (once).
+- Free users get a heads-up the first time in a session that a secret from their .env is printed in the terminal or Run console, with a "Don't tell me again" option.
+- Pro shows "EnvY: N masked" in the status bar, so you can see it working.
+- A reminder three days before a trial ends, with how many secrets EnvY masked during it.
+
+### Changed
+- Clicking a locked Pro feature in the EnvY settings popup now offers the trial instead of doing nothing. Paying users no longer see a trial link.
+- Pro reminders: after 2 active days instead of 6, at most 4 times, 10 days apart, and no longer waiting for the review prompt. "Don't show again" still turns them off for good.
+- The review request now appears right after EnvY fixed something for you, instead of after a number of days.
+
 ## [3.2.1]
 
 ### Free vs Pro

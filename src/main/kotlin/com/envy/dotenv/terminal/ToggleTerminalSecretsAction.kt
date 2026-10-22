@@ -13,7 +13,14 @@ class ToggleTerminalSecretsAction : AnAction("Toggle Terminal Secrets Visibility
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         if (!LicenseChecker.isPaidFeatureAvailable()) {
-            Notification("EnvY", "Terminal Secret Censor requires an EnvY Pro license.", NotificationType.WARNING)
+            Notification(
+                "EnvY",
+                "Masking secrets in the terminal is part of EnvY Pro.",
+                NotificationType.INFORMATION
+            )
+                .addAction(com.intellij.notification.NotificationAction.createSimpleExpiring("Start 30-day free trial") {
+                    com.envy.dotenv.licensing.ProUpgrade.requestTrial("Try EnvY Pro: secrets masked in your terminal, Run console and clipboard.")
+                })
                 .notify(project)
             return
         }

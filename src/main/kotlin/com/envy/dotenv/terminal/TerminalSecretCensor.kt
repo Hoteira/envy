@@ -79,6 +79,8 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
 
     private var cachedSecretValues: List<String> = emptyList()
     private var cachedAutomaton: AhoCorasick? = null
+    /** Masked value -> the .env key it came from, to name the key in the free-tier nudge. */
+    @Volatile private var valueToKey: Map<String, String> = emptyMap()
     private val automatonLock = Any()
     @Volatile private var automatonDirty = true
 
@@ -93,6 +95,7 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
     private val keyDispatcher = KeyEventDispatcher { e ->
         if (disposed || e.id != KeyEvent.KEY_PRESSED || sessions.isEmpty()) return@KeyEventDispatcher false
         if (!isToggleShortcut(e)) return@KeyEventDispatcher false
+        if (!LicenseChecker.isPaidFeatureAvailable()) return@KeyEventDispatcher false
         val focused = e.component
             ?: KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner
             ?: return@KeyEventDispatcher false
@@ -262,7 +265,7 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
 
     private fun track(editor: Editor) {
         if (sessions.containsKey(editor)) return
-        if (!LicenseChecker.isPaidFeatureAvailable()) return
+        // Tracked for everyone: Pro masks, free users get detection only (see processPending).
         LOG.info("Tracking terminal editor ${editor.hashCode()}")
         val session = Session()
         sessions[editor] = session
@@ -311,15 +314,15 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
             synchronized(automatonLock) { return cachedAutomaton to false }
         }
 
-        val secrets = ApplicationManager.getApplication().runReadAction(Computable {
-            if (project.isDisposed) return@Computable emptyList<String>()
+        val targets = ApplicationManager.getApplication().runReadAction(Computable {
+            if (project.isDisposed) return@Computable emptyList<Pair<String, String>>()
             val svc = project.getService(EnvFileService::class.java)
-                ?: return@Computable emptyList<String>()
+                ?: return@Computable emptyList<Pair<String, String>>()
             svc.getAllParsedEntries()
-                .flatMap { (k, v) -> SecretLeakInspection.censorTargets(k, v) }
-                .distinct()
-                .sorted()
+                .flatMap { (k, v) -> SecretLeakInspection.censorTargets(k, v).map { it to k } }
         })
+        val secrets = targets.map { it.first }.distinct().sorted()
+        valueToKey = targets.toMap()
 
         synchronized(automatonLock) {
             automatonDirty = false
@@ -334,10 +337,7 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
     private fun processPending() {
         if (disposed || project.isDisposed) return
         if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.terminalSecretCensor) return
-        if (!LicenseChecker.isPaidFeatureAvailable()) {
-            if (sessions.isNotEmpty()) clearAll()
-            return
-        }
+        val masking = LicenseChecker.isPaidFeatureAvailable()
         val editors = mutableListOf<Editor>()
         val iter = pendingEditors.iterator()
         while (iter.hasNext()) { editors += iter.next(); iter.remove() } // an editor re-added meanwhile stays queued
@@ -348,8 +348,10 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
             if (editor.isDisposed) { sessions.remove(editor); continue }
             val session = sessions[editor] ?: continue
 
+            if (!masking && session.hasHighlighters) clearHighlighters(editor, session)
+
             // Highlighters are EDT-only; this thread just computes ranges and hands them over.
-            if (automaton == null || session.isRevealed) {
+            if (automaton == null || (masking && session.isRevealed)) {
                 if (session.hasHighlighters) clearHighlighters(editor, session)
                 continue
             }
@@ -378,6 +380,18 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
             session.scannedUpTo = text.length
             session.acState = result.endState
             session.needsFullRescan = false
+
+            if (!masking) {
+                // Free tier: nothing is masked, but a secret that was just printed is the one
+                // moment the risk is real, so say so (once per session, see EngagementTracker).
+                if (!fullRescan && result.matches.isNotEmpty()) {
+                    val m = result.matches.first()
+                    val printed = text.subSequence(maxOf(0, m.startOffset), minOf(text.length, m.endOffset)).toString()
+                    com.envy.dotenv.engagement.EngagementTracker.getInstance()
+                        .onSecretPrinted(project, valueToKey[printed], "terminal")
+                }
+                continue
+            }
 
             val merged = mergeRanges(result.matches)
             applyHighlighters(editor, session, merged, fullRescan)
@@ -425,6 +439,7 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
             }
 
             val docLen = editor.document.textLength
+            var added = 0
             val existingRanges = session.activeHighlighters
                 .filter { it.isValid }
                 .mapTo(HashSet()) { it.startOffset to it.endOffset }
@@ -432,6 +447,7 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
             for ((start, end) in ranges) {
                 if (start < 0 || end > docLen || start >= end) continue
                 if (!existingRanges.add(start to end)) continue
+                added++
 
                 try {
                     val highlighter = editor.markupModel.addRangeHighlighter(
@@ -447,6 +463,7 @@ class TerminalSecretCensor(private val project: Project) : Disposable {
                 }
             }
             session.hasHighlighters = session.activeHighlighters.isNotEmpty()
+            if (!clearExisting && added > 0) MaskCounter.getInstance(project).record(added)
         }
     }
 
@@ -627,7 +644,6 @@ private val TERMINAL_KEY_NAMES = listOf(
 internal class TerminalSecretCensorInitializer : ProjectActivity {
     override suspend fun execute(project: Project) {
         if (!com.envy.dotenv.settings.EnvySettings.getInstance().state.terminalSecretCensor) return
-        if (!LicenseChecker.isPaidFeatureAvailable()) return
         DumbService.getInstance(project).runWhenSmart {
             project.getService(TerminalSecretCensor::class.java)
         }
@@ -635,15 +651,17 @@ internal class TerminalSecretCensorInitializer : ProjectActivity {
 }
 
 /**
- * Applies a license change without an IDE restart. When a license or trial becomes valid it creates
- * the censor for every open project (startup skips it for unlicensed users) and starts tracking
- * terminals that were opened while unlicensed. When the license goes away it removes the masks.
+ * Applies a license change without an IDE restart. When a license or trial becomes valid it makes
+ * sure the censor exists for every open project, picks up every terminal and rescans so existing
+ * output is masked. When the license goes away it removes the masks (detection keeps running).
+ * Also shows or hides the Pro status bar widget.
  * Registered under <applicationListeners> in plugin.xml.
  */
 internal class TerminalLicenseListener : LicenseStateListener {
     override fun licenseStateChanged(licensed: Boolean) {
         for (project in ProjectManager.getInstance().openProjects) {
             if (project.isDisposed) continue
+            MaskCounter.refreshAvailability(project)
             if (!licensed) {
                 project.getServiceIfCreated(TerminalSecretCensor::class.java)?.clearAll()
                 continue

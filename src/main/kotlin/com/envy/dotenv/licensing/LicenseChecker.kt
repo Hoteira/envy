@@ -142,6 +142,15 @@ object LicenseChecker {
         return hasCheckedOnce
     }
 
+    @Volatile private var trialEndsAtMs: Long? = null
+
+    /**
+     * When the current trial ends (epoch ms), or null when EnvY isn't on a trial or the IDE doesn't
+     * report trials as evaluation stamps. Never set for paid licenses, so subscribers are never
+     * told their "trial" is ending.
+     */
+    fun trialEndsAt(): Long? = if (hasCheckedOnce && cachedAvailable) trialEndsAtMs else null
+
     fun isPaidFeatureAvailableStrict(): Boolean {
         //if (System.getProperty("envy.dev.pro") == "true") return true
         val now = System.currentTimeMillis()
@@ -199,6 +208,8 @@ object LicenseChecker {
                 stamp.startsWith(STAMP_PREFIX) -> isLicenseServerStampValid(stamp.substring(STAMP_PREFIX.length))
                 stamp.startsWith(EVAL_PREFIX) -> isEvaluationValid(stamp.substring(EVAL_PREFIX.length))
                 else -> false
+            }.also { valid ->
+                trialEndsAtMs = if (valid && stamp.startsWith(EVAL_PREFIX)) stamp.substring(EVAL_PREFIX.length).toLongOrNull() else null
             }
         } catch (e: Exception) {
             if (e is com.intellij.openapi.progress.ProcessCanceledException) throw e

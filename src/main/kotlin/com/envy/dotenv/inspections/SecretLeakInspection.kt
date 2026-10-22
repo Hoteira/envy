@@ -359,6 +359,15 @@ class SecretLeakInspection : LocalInspectionTool() {
     data class SecretPattern(val name: String, val regex: Regex)
 }
 
+/**
+ * A quick fix just solved something for the user: the moment to ask for a review. Skipped when the
+ * fix only runs to render the Alt+Enter preview.
+ */
+internal fun recordWin(project: Project) {
+    if (com.intellij.codeInsight.intention.preview.IntentionPreviewUtils.isIntentionPreviewActive()) return
+    com.envy.dotenv.engagement.EngagementTracker.getInstance().onWin(project)
+}
+
 /** Appends a pattern to a .gitignore unless an equivalent line is already there. */
 internal object GitignoreWriter {
     fun addEntry(project: Project, dir: VirtualFile, pattern: String) {
@@ -398,6 +407,7 @@ class AddToGitignoreFix(private val fileName: String) : LocalQuickFix {
         val dir = GitignoreWriter.dirFor(project, file) ?: return
         GitignoreWriter.addEntry(project, dir, fileName)
         file?.let { VcsDirtyScopeManager.getInstance(project).fileDirty(it) }
+        recordWin(project)
     }
 }
 
@@ -451,6 +461,7 @@ class StopTrackingFix(private val fileName: String) : LocalQuickFix {
                     "Commit this change to remove it from the repository. Its values are still in git history, so rotate any real secrets it contained.",
                     NotificationType.INFORMATION
                 ).notify(project)
+                recordWin(project)
             }
         }.queue()
     }
@@ -476,6 +487,7 @@ class ReplaceWithPlaceholderFix(private val key: String) : LocalQuickFix {
                 DotEnvTypes.VALUE, DotEnvTypes.QUOTED_VALUE -> if (separatorEnd >= 0) {
                     document.replaceString(node.textRange.startOffset, node.textRange.endOffset, placeholder)
                     PsiDocumentManager.getInstance(project).commitDocument(document)
+                    recordWin(project)
                     return
                 }
             }

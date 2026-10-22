@@ -17,7 +17,11 @@ import com.envy.dotenv.services.EnvFileService
 class ConsoleSecretAutomaton(private val project: Project) : Disposable {
     private var cachedSecrets: List<String> = emptyList()
     private var cachedAutomaton: AhoCorasick? = null
+    @Volatile private var valueToKey: Map<String, String> = emptyMap()
     @Volatile var dirty = true
+
+    /** The .env key a masked value came from, if known. */
+    fun keyFor(value: String): String? = valueToKey[value]
 
     init {
         ApplicationManager.getApplication().messageBus.connect(this)
@@ -31,15 +35,15 @@ class ConsoleSecretAutomaton(private val project: Project) : Disposable {
     fun getAutomaton(): AhoCorasick? {
         if (!dirty) return cachedAutomaton
 
-        val secrets = ApplicationManager.getApplication().runReadAction(Computable {
-            if (project.isDisposed) return@Computable emptyList<String>()
+        val targets = ApplicationManager.getApplication().runReadAction(Computable {
+            if (project.isDisposed) return@Computable emptyList<Pair<String, String>>()
             val svc = project.getService(EnvFileService::class.java)
-                ?: return@Computable emptyList<String>()
+                ?: return@Computable emptyList<Pair<String, String>>()
             svc.getAllParsedEntries()
-                .flatMap { (k, v) -> SecretLeakInspection.censorTargets(k, v) }
-                .distinct()
-                .sorted()
+                .flatMap { (k, v) -> SecretLeakInspection.censorTargets(k, v).map { it to k } }
         })
+        valueToKey = targets.toMap()
+        val secrets = targets.map { it.first }.distinct().sorted()
 
         if (secrets == cachedSecrets) {
             dirty = false
@@ -65,16 +69,28 @@ class ConsoleSecretRedactionProvider : ConsoleInputFilterProvider {
 
 private class ConsoleSecretRedactionFilter(private val project: Project) : InputFilter {
 
-    private val redactor = StreamingRedactor()
+    private val redactor = StreamingRedactor { masked -> MaskCounter.getInstance(project).record(masked) }
 
     override fun applyFilter(
         text: String,
         contentType: ConsoleViewContentType
     ): List<JBPair<String, ConsoleViewContentType>>? {
         if (project.isDisposed) return null
-        val enabled = com.envy.dotenv.settings.EnvySettings.getInstance().state.consoleSecretRedaction &&
-            com.envy.dotenv.licensing.LicenseChecker.isPaidFeatureAvailable()
-        val automaton = if (enabled) project.getService(ConsoleSecretAutomaton::class.java)?.getAutomaton() else null
+        val settingOn = com.envy.dotenv.settings.EnvySettings.getInstance().state.consoleSecretRedaction
+        val licensed = com.envy.dotenv.licensing.LicenseChecker.isPaidFeatureAvailable()
+
+        if (settingOn && !licensed && contentType != ConsoleViewContentType.USER_INPUT) {
+            // Free tier: detect only, and tell the user once (see EngagementTracker.onSecretPrinted).
+            val svc = project.getService(ConsoleSecretAutomaton::class.java)
+            val match = svc?.getAutomaton()?.scan(text)?.matches?.firstOrNull()
+            if (match != null) {
+                val printed = text.substring(maxOf(0, match.startOffset), minOf(text.length, match.endOffset))
+                com.envy.dotenv.engagement.EngagementTracker.getInstance()
+                    .onSecretPrinted(project, svc.keyFor(printed), "Run console")
+            }
+        }
+
+        val automaton = if (settingOn && licensed) project.getService(ConsoleSecretAutomaton::class.java)?.getAutomaton() else null
 
         // Never hold back what the user types: that would delay their own echo.
         val canHold = contentType != ConsoleViewContentType.USER_INPUT
@@ -93,7 +109,7 @@ private class ConsoleSecretRedactionFilter(private val project: Project) : Input
  * Shorter tails are printed straight away: holding single characters would stall interactive
  * prompts. A held tail is lost only if the process exits mid-secret without a final newline.
  */
-internal class StreamingRedactor {
+internal class StreamingRedactor(private val onMasked: (Int) -> Unit = {}) {
 
     private class StreamState {
         var held: String = ""
@@ -143,6 +159,7 @@ internal class StreamingRedactor {
             return if (!hadHeld && cut == input.length) null else input.substring(0, cut)
         }
 
+        onMasked(ranges.size)
         val sb = StringBuilder(cut)
         var pos = 0
         for ((start, end) in ranges) {

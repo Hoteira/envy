@@ -3,7 +3,7 @@
 
 # EnvY
 
-**Smart .env file manager for JetBrains IDEs**
+**Keeps .env secrets out of your terminal, logs and screen shares**
 
 [![JetBrains](https://img.shields.io/badge/JetBrains-Marketplace-000000.svg?style=flat-square&logo=jetbrains)](https://plugins.jetbrains.com/plugin/31217-envy/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF.svg?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
@@ -18,9 +18,24 @@
 ## Overview
 
 <!-- Plugin description -->
-EnvY brings first-class .env file support to all JetBrains IDEs. Syntax highlighting, duplicate key detection with inline warnings, secret leak detection, a cross-environment diff tool to spot mismatches between environments, and automatic secret folding in presentation mode.
+**Keep secrets out of your terminal, logs and screen shares.** EnvY masks the values from your .env files as they're printed in the IDE terminal and Run console, and makes .env files easy to work with in every JetBrains IDE.
 
-Works with IntelliJ IDEA, WebStorm, PyCharm, CLion, RustRover, GoLand, PhpStorm, and Rider.
+### Free
+- Syntax highlighting, duplicate key warnings with a safe quick fix, and an Env Diff tool window to compare environments
+- Secret leak detection: AWS, Stripe, GitHub, OpenAI, Anthropic, Google and Slack keys, JWTs, private keys and database URLs with passwords
+- Warns when a .env with secrets isn't gitignored or is already tracked by git, with one-click fixes
+- Env var completion in code for 10+ languages, including inline ghost completion (Tab to accept)
+- Secret values hidden in Presentation Mode; .envrc (direnv) support
+
+### Pro: 30-day free trial
+- **Terminal masking:** secrets from your .env files show as `***` in the IDE terminal as they're printed. Toggle with Ctrl+Alt+Shift+X
+- **Run/Debug console masking**, even for secrets split across output chunks
+- **Clipboard protection:** copying masked output copies `***`, not the secret
+- **SOPS:** edit encrypted .env files side by side; plaintext never touches disk
+
+Start the trial from Help | Register, or from any EnvY prompt in the IDE.
+
+Works with IntelliJ IDEA, WebStorm, PyCharm, GoLand, PhpStorm, RubyMine, CLion, RustRover and Rider.
 <!-- Plugin description end -->
 
 <div align="left" style="padding-left: 16px;">
@@ -84,6 +99,7 @@ Seamlessly edit SOPS-encrypted .env files with in-memory decryption/re-encryptio
 | Terminal secret censoring |      | ✓ |
 | Toggle secret visibility (Ctrl+Alt+Shift+X) |      | ✓ |
 | Clipboard redaction on copy |      | ✓ |
+| Masked-secrets counter in the status bar |      | ✓ |
 | Run/Debug console secret redaction |      | ✓ |
 | SOPS encrypted .env file support |      | ✓ |
 
