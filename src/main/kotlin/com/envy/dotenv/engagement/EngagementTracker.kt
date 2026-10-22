@@ -204,9 +204,9 @@ class EngagementTracker : PersistentStateComponent<EngagementTracker.State> {
 
     private fun fileLikelyContainsSecret(file: VirtualFile): Boolean {
         return try {
-            val text = com.intellij.openapi.application.ReadAction.compute<String?, RuntimeException> {
+            val text = ApplicationManager.getApplication().runReadAction(com.intellij.openapi.util.Computable<String?> {
                 FileDocumentManager.getInstance().getDocument(file)?.charsSequence?.toString()
-            } ?: return false
+            }) ?: return false
             SecretLeakInspection.textContainsSecret(text)
         } catch (e: Exception) {
             false

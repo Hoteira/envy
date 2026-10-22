@@ -4,7 +4,6 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.editor.Document
@@ -15,6 +14,7 @@ import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Computable
 import com.intellij.openapi.util.ThrowableComputable
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
@@ -108,9 +108,9 @@ class SopsService(private val project: Project) : Disposable {
 
         // Keep our own reference to the document: saving must not depend on FileDocumentManager
         // still caching a document for a light file.
-        val document = ReadAction.compute<Document?, RuntimeException> {
+        val document = ApplicationManager.getApplication().runReadAction(Computable<Document?> {
             FileDocumentManager.getInstance().getDocument(lightFile)
-        } ?: EditorFactory.getInstance().createDocument(result.output)
+        }) ?: EditorFactory.getInstance().createDocument(result.output)
 
         val session = SopsSession(realFile, lightFile, sopsPath, document)
         sessions[lightFile] = session
@@ -123,7 +123,7 @@ class SopsService(private val project: Project) : Disposable {
         val stamp = session.document.modificationStamp
         if (stamp == session.inFlightStamp) return
         session.inFlightStamp = stamp
-        val plaintext = ReadAction.compute<String, RuntimeException> { session.document.text }
+        val plaintext = ApplicationManager.getApplication().runReadAction(Computable<String> { session.document.text })
 
         object : Task.Backgroundable(project, "Encrypting ${session.realFile.name} with SOPS", false) {
             override fun run(indicator: ProgressIndicator) {
@@ -144,7 +144,7 @@ class SopsService(private val project: Project) : Disposable {
     fun flushBlocking(session: SopsSession) {
         if (!isDirty(session)) return
         val stamp = session.document.modificationStamp
-        val plaintext = ReadAction.compute<String, RuntimeException> { session.document.text }
+        val plaintext = ApplicationManager.getApplication().runReadAction(Computable<String> { session.document.text })
 
         val app = ApplicationManager.getApplication()
         val error = if (app.isDispatchThread && !app.isWriteAccessAllowed && !project.isDisposed) {
@@ -237,7 +237,7 @@ class SopsService(private val project: Project) : Disposable {
             try {
                 if (isDirty(session)) {
                     val stamp = session.document.modificationStamp
-                    val plaintext = ReadAction.compute<String, RuntimeException> { session.document.text }
+                    val plaintext = ApplicationManager.getApplication().runReadAction(Computable<String> { session.document.text })
                     encryptAndWrite(session, plaintext, stamp)?.let { LOG.warn("SOPS flush on dispose failed: $it") }
                 }
             } catch (e: Exception) {
