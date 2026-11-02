@@ -29,6 +29,7 @@ import com.intellij.psi.util.CachedValue
 import com.intellij.util.Alarm
 import com.envy.dotenv.language.DotEnvFileType
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import com.intellij.util.messages.Topic
 
@@ -65,42 +66,85 @@ class EnvFileService(private val project: Project) : Disposable {
 
     private val connection = ApplicationManager.getApplication().messageBus.connect(this)
 
-    // The file index can't be queried while the IDE is indexing (dumb mode): doing so throws
-    // IndexNotReadyException, which users see as "EnvY caused an error". During dumb mode this
-    // returns an empty list that is invalidated when indexing ends (DumbService's tracker), and
-    // exitDumbMode() below re-parses everything and notifies the censor and completion.
-    private val fileListCachedValue: CachedValue<List<VirtualFile>> =
-        CachedValuesManager.getManager(project).createCachedValue {
-            val dumbService = DumbService.getInstance(project)
-            val files = ApplicationManager.getApplication().runReadAction(Computable {
-                com.intellij.openapi.progress.ProgressManager.checkCanceled()
-                if (project.isDisposed || dumbService.isDumb) return@Computable emptyList<VirtualFile>()
-                try {
-                    // Index by EnvY's file type AND JetBrains' bundled ".env file" type: when both
-                    // plugins are installed only one owns .env files, and the terminal/console
-                    // censor and completion must work either way.
-                    val scope = GlobalSearchScope.projectScope(project)
-                    val types = listOfNotNull(
-                        DotEnvFileType,
-                        com.intellij.openapi.fileTypes.FileTypeManager.getInstance()
-                            .findFileTypeByName(OTHER_DOTENV_FILE_TYPE)
-                            ?.takeIf { it != DotEnvFileType }
-                    )
-                    types.flatMap { FileTypeIndex.getFiles(it, scope) }.distinct().filter { file ->
-                        val p = file.path
-                        isEnvPath(p) && !p.contains("/.git/") && !p.contains("/node_modules/")
-                    }.sortedBy { it.path }
-                } catch (_: IndexNotReadyException) {
-                    emptyList()
-                }
-            })
-            CachedValueProvider.Result.create(files, modificationTracker, dumbService.modificationTracker)
+    private class FileListSnapshot(val files: List<VirtualFile>, val modStamp: Long, val dumbStamp: Long)
+
+    @Volatile private var fileListSnapshot = FileListSnapshot(emptyList(), -1, -1)
+    private val fileListRefreshQueued = AtomicBoolean(false)
+
+    /**
+     * The project's .env files. Querying the file index is too slow for the UI thread: Run and VCS
+     * consoles call the redaction filter there, and the platform reports it as "slow operation may
+     * freeze UI". So the UI thread only ever gets the last computed list and queues a background
+     * refresh (which notifies listeners if the list changed); other threads compute it directly.
+     *
+     * The index can't be queried while the IDE is indexing (dumb mode): doing so throws
+     * IndexNotReadyException. During dumb mode the list is empty, and exitDumbMode() below
+     * re-parses everything and notifies the censor and completion.
+     */
+    private fun envFileList(): List<VirtualFile> {
+        val snapshot = fileListSnapshot
+        val modStamp = modificationCount.get()
+        val dumbStamp = DumbService.getInstance(project).modificationTracker.modificationCount
+        if (snapshot.modStamp == modStamp && snapshot.dumbStamp == dumbStamp) return snapshot.files
+        if (ApplicationManager.getApplication().isDispatchThread) {
+            scheduleFileListRefresh()
+            return snapshot.files
         }
+        val files = computeEnvFileList()
+        fileListSnapshot = FileListSnapshot(files, modStamp, dumbStamp)
+        return files
+    }
+
+    private fun scheduleFileListRefresh() {
+        if (!fileListRefreshQueued.compareAndSet(false, true)) return
+        ApplicationManager.getApplication().executeOnPooledThread {
+            try {
+                if (disposed || project.isDisposed) return@executeOnPooledThread
+                val before = fileListSnapshot.files
+                val after = envFileList()
+                if (after != before) {
+                    for (file in after) {
+                        if (!fileKeyValues.containsKey(file.path)) parseAndStore(file)
+                    }
+                    notifyListeners()
+                }
+            } finally {
+                fileListRefreshQueued.set(false)
+            }
+        }
+    }
+
+    private fun computeEnvFileList(): List<VirtualFile> {
+        val dumbService = DumbService.getInstance(project)
+        val files = ApplicationManager.getApplication().runReadAction(Computable {
+            com.intellij.openapi.progress.ProgressManager.checkCanceled()
+            if (project.isDisposed || dumbService.isDumb) return@Computable emptyList<VirtualFile>()
+            try {
+                // Index by EnvY's file type AND JetBrains' bundled ".env file" type: when both
+                // plugins are installed only one owns .env files, and the terminal/console
+                // censor and completion must work either way.
+                val scope = GlobalSearchScope.projectScope(project)
+                val types = listOfNotNull(
+                    DotEnvFileType,
+                    com.intellij.openapi.fileTypes.FileTypeManager.getInstance()
+                        .findFileTypeByName(OTHER_DOTENV_FILE_TYPE)
+                        ?.takeIf { it != DotEnvFileType }
+                )
+                types.flatMap { FileTypeIndex.getFiles(it, scope) }.distinct().filter { file ->
+                    val p = file.path
+                    isEnvPath(p) && !p.contains("/.git/") && !p.contains("/node_modules/")
+                }.sortedBy { it.path }
+            } catch (_: IndexNotReadyException) {
+                emptyList()
+            }
+        })
+        return files
+    }
 
     private val allKeyValuesCachedValue: CachedValue<Map<String, String>> =
         CachedValuesManager.getManager(project).createCachedValue {
             val mergedValues = mutableMapOf<String, String>()
-            for (file in fileListCachedValue.value) {
+            for (file in envFileList()) {
                 val map = fileKeyValues[file.path] ?: continue
                 for ((key, value) in map) {
                     mergedValues.putIfAbsent(key, value)
@@ -153,7 +197,7 @@ class EnvFileService(private val project: Project) : Disposable {
                     ApplicationManager.getApplication().executeOnPooledThread {
                         if (disposed) return@executeOnPooledThread
                         notifyListeners()
-                        for (file in fileListCachedValue.value) {
+                        for (file in envFileList()) {
                             if (!fileKeyValues.containsKey(file.path)) {
                                 parseAndStore(file)
                             }
@@ -200,7 +244,7 @@ class EnvFileService(private val project: Project) : Disposable {
     private fun rebuildAll() {
         ApplicationManager.getApplication().executeOnPooledThread {
             if (disposed || project.isDisposed) return@executeOnPooledThread
-            for (file in fileListCachedValue.value) {
+            for (file in envFileList()) {
                 parseAndStore(file)
             }
             notifyListeners()
@@ -237,7 +281,7 @@ class EnvFileService(private val project: Project) : Disposable {
         fileKeyValues[file.path] = map
     }
 
-    fun findEnvFiles(): List<VirtualFile> = fileListCachedValue.value
+    fun findEnvFiles(): List<VirtualFile> = envFileList()
 
     fun parseEnvFile(file: VirtualFile): Map<String, String> {
         val existing = fileKeyValues[file.path]
@@ -264,7 +308,7 @@ class EnvFileService(private val project: Project) : Disposable {
 
     fun getAllParsedEntries(): List<Pair<String, String>> {
         val result = mutableListOf<Pair<String, String>>()
-        for (file in fileListCachedValue.value) {
+        for (file in envFileList()) {
             val map = fileKeyValues[file.path] ?: continue
             for ((key, value) in map) {
                 result.add(key to value)

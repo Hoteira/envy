@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.3.1]
+
+### Fixed
+- "Slow operation may freeze UI" error when Git or Run console output was printed: EnvY no longer looks up .env files on the UI thread.
+
 ## [3.3.0]
 
 ### New
